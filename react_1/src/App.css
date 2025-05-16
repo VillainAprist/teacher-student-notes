@@ -46,6 +46,109 @@ body {
   overflow-x: hidden;
 }
 
+body.dark-mode {
+  background: #181313 !important;
+  color: #f1eaea !important;
+}
+
+body.dark-mode .card,
+body.dark-mode .navbar,
+body.dark-mode .table,
+body.dark-mode .list-group-item {
+  background: #2d1a1a !important;
+  color: #f1eaea !important;
+  border-color: #A05252 !important;
+}
+
+body.dark-mode .navbar {
+  background: linear-gradient(90deg, #A05252 60%, #5C2B2B 100%) !important;
+}
+
+body.dark-mode .btn-primary,
+body.dark-mode .btn-success,
+body.dark-mode .btn-warning,
+body.dark-mode .btn-danger,
+body.dark-mode .btn-outline-primary,
+body.dark-mode .btn-outline-danger,
+body.dark-mode .btn-outline-light {
+  background: #A05252 !important;
+  color: #fff !important;
+  border-color: #B56A6A !important;
+}
+
+body.dark-mode .btn-primary:hover,
+body.dark-mode .btn-primary:focus {
+  background: #5C2B2B !important;
+  border-color: #5C2B2B !important;
+}
+
+body.dark-mode .form-control,
+body.dark-mode .form-select {
+  background: #2d1a1a !important;
+  color: #f1eaea !important;
+  border-color: #A05252 !important;
+}
+
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus {
+  border-color: #A05252 !important;
+  box-shadow: 0 0 0 0.2rem rgba(160,82,82,0.15) !important;
+}
+
+body.dark-mode .table thead {
+  background: #A05252 !important;
+  color: #fff !important;
+}
+
+body.dark-mode .list-group-item.active {
+  background: #A05252 !important;
+  border-color: #A05252 !important;
+  color: #fff !important;
+}
+
+body.dark-mode .list-group-item {
+  border-color: #A05252 !important;
+}
+
+body.dark-mode .alert-info {
+  background: #2d1a1a !important;
+  color: #f1eaea !important;
+  border-color: #A05252 !important;
+}
+
+body.dark-mode .dropdown-menu {
+  background: #2d1a1a !important;
+  color: #f1eaea !important;
+}
+
+body.dark-mode .dropdown-item {
+  color: #f1eaea !important;
+}
+
+body.dark-mode .dropdown-item:hover {
+  background: #A05252 !important;
+  color: #fff !important;
+}
+
+body.dark-mode input::placeholder,
+body.dark-mode textarea::placeholder {
+  color: #bfa6a6 !important;
+}
+
+body.dark-mode .navbar-text {
+  color: #fff !important;
+}
+
+body.dark-mode .btn-outline-light {
+  color: #fff !important;
+  border-color: #fff !important;
+}
+
+body.dark-mode .btn-outline-light:hover {
+  background: #fff !important;
+  color: #A05252 !important;
+}
+
 html {
   overflow-x: hidden;
 }

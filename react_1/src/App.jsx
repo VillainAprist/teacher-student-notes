@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
@@ -19,6 +19,19 @@ function App() {
     seccion: '',
     imagen: '', // Added to store profile image
   })
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('theme') === 'dark';
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.body.classList.add('dark-mode');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.body.classList.remove('dark-mode');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
 
   const handleLogout = () => setUser(null)
 
@@ -31,7 +44,7 @@ function App() {
 
   return (
     <Router>
-      <nav className="navbar navbar-expand-lg" style={{background: 'linear-gradient(90deg, #A05252 60%, #5C2B2B 100%)', color: '#fff', position: 'fixed', top: 0, left: 0, width: '100vw', zIndex: 100, boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
+      <nav className="navbar navbar-expand-lg" style={{background: darkMode ? 'linear-gradient(90deg, #222 60%, #444 100%)' : 'linear-gradient(90deg, #A05252 60%, #5C2B2B 100%)', color: '#fff', position: 'fixed', top: 0, left: 0, width: '100vw', zIndex: 100, boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
         <div className="container-fluid px-4">
           <a className="navbar-brand fw-bold" href="#" style={{color: '#fff', letterSpacing: 1}}>
             UNFV - FIEI | Gestor de Notas
@@ -51,6 +64,9 @@ function App() {
               )}
               {user.username} ({user.role})
             </span>
+            <button className="btn btn-outline-light me-2" onClick={() => setDarkMode(dm => !dm)}>
+              {darkMode ? 'Light Mode' : 'Dark Mode'}
+            </button>
             <button className="btn btn-outline-light" onClick={handleLogout}>Logout</button>
           </div>
         </div>

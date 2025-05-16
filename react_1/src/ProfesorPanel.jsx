@@ -112,6 +112,11 @@ function ProfesorPanel({ cursos, setCursos }) {
     }
   };
 
+  const handleSelectCurso = (idx) => {
+    setSelectedCurso(idx);
+    setShowChartIdx(null);
+  };
+
   const estudiantesFiltrados = selectedCurso !== null ? cursos[selectedCurso].estudiantes.filter(est => est.nombre.toLowerCase().includes(busqueda.toLowerCase())) : [];
 
   return (
@@ -153,7 +158,7 @@ function ProfesorPanel({ cursos, setCursos }) {
           <ul className="list-group">
             {cursos.map((curso, idx) => (
               <li key={idx} className={`list-group-item d-flex justify-content-between align-items-center ${selectedCurso === idx ? 'active' : ''}`}
-                onClick={() => setSelectedCurso(idx)} style={{ cursor: 'pointer', marginBottom: 10, padding: '16px 12px' }}>
+                onClick={() => handleSelectCurso(idx)} style={{ cursor: 'pointer', marginBottom: 10, padding: '16px 12px' }}>
                 <div>
                   <strong>{curso.nombre}</strong>
                   <div style={{ fontSize: '0.9em' }}>
@@ -172,7 +177,7 @@ function ProfesorPanel({ cursos, setCursos }) {
           </ul>
         </div>
         <div className="col-md-9" style={{ paddingLeft: 0, paddingRight: 0 }}>
-          {showChartIdx !== null && cursos[showChartIdx] && (
+          {showChartIdx !== null && cursos[showChartIdx] && selectedCurso === showChartIdx && (
             <div className="mb-4">
               <h5 className="mb-3">Desempeño de estudiantes en {cursos[showChartIdx].nombre}</h5>
               <Bar
@@ -187,7 +192,7 @@ function ProfesorPanel({ cursos, setCursos }) {
                         let sumaExtras = 0;
                         if (est.notas) {
                           Object.keys(est.notas).forEach(k => {
-                            if (k.startsWith('extra') || k === 'extras') sumaExtras += +est.notas[k] || 0;
+                            if (k.startsWith('opc')) sumaExtras += +est.notas[k] || 0;
                           });
                         }
                         return (promedioPC * 0.4) + (+est.notas.parcial * 0.3) + (+est.notas.final * 0.3) + sumaExtras;
@@ -220,43 +225,103 @@ function ProfesorPanel({ cursos, setCursos }) {
                     placeholder="Nombre del estudiante"
                     value={nuevoEstudiante}
                     onChange={e => setNuevoEstudiante(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowRight' || e.key === 'Enter') {
+                        e.preventDefault();
+                        document.getElementById('input-pc1')?.focus();
+                      }
+                    }}
                   />
                   <input
+                    id="input-pc1"
                     type="number"
                     className="form-control"
                     placeholder="PC1"
                     value={notas.pc1}
                     onChange={e => setNotas({ ...notas, pc1: e.target.value })}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        document.querySelector('input[placeholder=\'Nombre del estudiante\']')?.focus();
+                      } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
+                        e.preventDefault();
+                        document.getElementById('input-pc2')?.focus();
+                      }
+                    }}
                   />
                   <input
+                    id="input-pc2"
                     type="number"
                     className="form-control"
                     placeholder="PC2"
                     value={notas.pc2}
                     onChange={e => setNotas({ ...notas, pc2: e.target.value })}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        document.getElementById('input-pc1')?.focus();
+                      } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
+                        e.preventDefault();
+                        document.getElementById('input-parcial')?.focus();
+                      }
+                    }}
                   />
                   <input
+                    id="input-parcial"
                     type="number"
                     className="form-control"
                     placeholder="Parcial"
                     value={notas.parcial}
                     onChange={e => setNotas({ ...notas, parcial: e.target.value })}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        document.getElementById('input-pc2')?.focus();
+                      } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
+                        e.preventDefault();
+                        document.getElementById('input-final')?.focus();
+                      }
+                    }}
                   />
                   <input
+                    id="input-final"
                     type="number"
                     className="form-control"
                     placeholder="Final"
                     value={notas.final}
                     onChange={e => setNotas({ ...notas, final: e.target.value })}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        document.getElementById('input-parcial')?.focus();
+                      } else if ((e.key === 'ArrowRight' || e.key === 'Enter') && document.getElementById('input-opc1')) {
+                        e.preventDefault();
+                        document.getElementById('input-opc1')?.focus();
+                      }
+                    }}
                   />
                   {notasExtras.map((nota, idx) => (
                     <input
                       key={nota.nombre}
+                      id={`input-${nota.nombre}`}
                       type="number"
                       className="form-control"
                       placeholder={nota.label}
                       value={nota.valor}
                       onChange={e => handleNotaExtraChange(idx, e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'ArrowLeft') {
+                          e.preventDefault();
+                          if (idx === 0) {
+                            document.getElementById('input-final')?.focus();
+                          } else {
+                            document.getElementById(`input-${notasExtras[idx-1].nombre}`)?.focus();
+                          }
+                        } else if ((e.key === 'ArrowRight' || e.key === 'Enter') && idx < notasExtras.length - 1) {
+                          e.preventDefault();
+                          document.getElementById(`input-${notasExtras[idx+1].nombre}`)?.focus();
+                        }
+                      }}
                     />
                   ))}
                   <button className="btn btn-secondary" type="button" onClick={agregarNotaExtra}>+ Nota Extra</button>
