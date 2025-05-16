@@ -1,4 +1,7 @@
-function AlumnoPanel({ cursos, alumno }) {
+import { useNavigate } from 'react-router-dom';
+
+function AlumnoPanel({ cursos, alumno, perfil }) {
+  const navigate = useNavigate();
   return (
     <div className="container mt-4">
       <h2>Mis Notas</h2>
@@ -15,6 +18,7 @@ function AlumnoPanel({ cursos, alumno }) {
                   <table className="table">
                     <thead>
                       <tr>
+                        <th>Nombre</th>
                         <th>PC1</th>
                         <th>PC2</th>
                         <th>Parcial</th>
@@ -25,6 +29,19 @@ function AlumnoPanel({ cursos, alumno }) {
                     </thead>
                     <tbody>
                       <tr>
+                        <td>
+                          <span style={{display:'flex', alignItems:'center', gap:8}}>
+                            {perfil?.imagen && (
+                              <img src={perfil.imagen} alt="avatar" style={{width:28, height:28, borderRadius:'50%', objectFit:'cover', border:'1.5px solid #A05252'}} />
+                            )}
+                            <span
+                              style={{color:'#A05252', cursor:'pointer', textDecoration:'underline'}}
+                              onClick={() => navigate(`/perfil/${encodeURIComponent(estudiante.nombre)}`)}
+                            >
+                              {estudiante.nombre}
+                            </span>
+                          </span>
+                        </td>
                         <td>{estudiante.notas.pc1}</td>
                         <td>{estudiante.notas.pc2}</td>
                         <td>{estudiante.notas.parcial}</td>

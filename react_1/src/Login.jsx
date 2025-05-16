@@ -17,8 +17,8 @@ function Login({ onLogin }) {
   };
 
   return (
-    <div className="container d-flex justify-content-center align-items-center vh-100">
-      <div className="card p-4 shadow" style={{ minWidth: 350 }}>
+    <div className="container-fluid d-flex justify-content-center align-items-center vh-100" style={{ padding: 0, margin: 0 }}>
+      <div className="card p-4 shadow w-100" style={{ minWidth: 350, maxWidth: 500, margin: 0 }}>
         <h2 className="mb-4 text-center">Iniciar Sesión</h2>
         <form onSubmit={handleSubmit}>
           <div className="mb-3">
@@ -51,7 +51,7 @@ function Login({ onLogin }) {
             </select>
           </div>
           {error && <p className="text-danger">{error}</p>}
-          <button type="submit" className="btn btn-primary w-100">Entrar</button>
+          <button type="submit" className="btn btn-primary w-100 py-2">Entrar</button>
         </form>
       </div>
     </div>
