@@ -14,12 +14,12 @@ function AlumnoPanel({ cursos, alumno, perfil }) {
       const cursosData = cursosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       // Filtra solo los cursos donde el alumno está inscrito
       const cursosAlumno = cursosData.filter(curso =>
-        curso.estudiantes && curso.estudiantes.some(e => e.nombre === alumno || e.email === alumno)
+        curso.estudiantes && curso.estudiantes.some(e => e.nombre === alumno || e.email === alumno || e.codigo === (perfil?.codigo || ''))
       );
       setCursosDB(cursosAlumno);
     };
     fetchCursos();
-  }, [alumno]);
+  }, [alumno, perfil]);
 
   const cursosToShow = cursosDB.length ? cursosDB : cursos;
 
@@ -30,7 +30,7 @@ function AlumnoPanel({ cursos, alumno, perfil }) {
         <p>No hay cursos disponibles.</p>
       ) : (
         cursosToShow.map((curso, idx) => {
-          const estudiante = curso.estudiantes.find(e => e.nombre === alumno);
+          const estudiante = curso.estudiantes.find(e => e.nombre === alumno || e.codigo === (perfil?.codigo || ''));
           return (
             <div key={idx} className="card mb-3">
               <div className="card-header">{curso.nombre}</div>
@@ -40,6 +40,7 @@ function AlumnoPanel({ cursos, alumno, perfil }) {
                     <thead>
                       <tr>
                         <th>Nombre</th>
+                        <th>Código</th>
                         <th>PC1</th>
                         <th>PC2</th>
                         <th>Parcial</th>
@@ -63,6 +64,7 @@ function AlumnoPanel({ cursos, alumno, perfil }) {
                             </span>
                           </span>
                         </td>
+                        <td>{perfil?.codigo || estudiante.codigo || ''}</td>
                         <td>{estudiante.notas.pc1}</td>
                         <td>{estudiante.notas.pc2}</td>
                         <td>{estudiante.notas.parcial}</td>

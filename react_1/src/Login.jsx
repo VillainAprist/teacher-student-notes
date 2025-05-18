@@ -6,7 +6,10 @@ import { setDoc, doc, getDoc } from 'firebase/firestore';
 function Login({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState('alumno');
+  const [nombre, setNombre] = useState('');
+  const [codigo, setCodigo] = useState('');
   const [error, setError] = useState('');
   const [showRegister, setShowRegister] = useState(false);
   const [registerError, setRegisterError] = useState('');
@@ -21,16 +24,18 @@ function Login({ onLogin }) {
     try {
       // Login real con Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, username, password);
-      // Obtener el rol desde Firestore
+      // Obtener datos desde Firestore
       const userDoc = await getDoc(doc(db, 'usuarios', userCredential.user.uid));
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        // Ahora pasamos el uid, email y rol
+        // Ahora pasamos el uid, email, rol, nombre y codigo
         onLogin({
-          username: username,
+          username: userData.nombre || username,
           email: userCredential.user.email,
           uid: userCredential.user.uid,
-          role: userData.rol
+          role: userData.rol,
+          codigo: userData.codigo || '',
+          nombre: userData.nombre || '',
         });
       } else {
         setError('No se encontró información de usuario.');
@@ -48,21 +53,34 @@ function Login({ onLogin }) {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (!username || !password) {
+    if (!username || !password || !nombre || !codigo || !confirmPassword) {
       setRegisterError('Por favor, completa todos los campos.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setRegisterError('Las contraseñas no coinciden.');
       return;
     }
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, username, password);
-      // Guarda el rol en Firestore
-      await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
-        email: username,
-        rol: role,
-        createdAt: new Date()
-      });
+      try {
+        await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
+          email: username,
+          rol: role,
+          nombre: nombre,
+          codigo: codigo,
+          createdAt: new Date().toISOString()
+        });
+      } catch (firestoreError) {
+        setRegisterError('Error al guardar en Firestore: ' + (firestoreError.message || firestoreError.code || firestoreError));
+        return;
+      }
       setShowRegister(false);
       setRegisterError('');
       setError('Cuenta creada correctamente. Ahora puedes iniciar sesión.');
+      setNombre('');
+      setCodigo('');
+      setConfirmPassword('');
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') {
         setRegisterError('El correo ya está registrado.');
@@ -90,6 +108,28 @@ function Login({ onLogin }) {
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
+          {showRegister && (
+            <>
+              <div className="mb-3">
+                <label className="form-label">Nombre:</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={nombre}
+                  onChange={e => setNombre(e.target.value)}
+                />
+              </div>
+              <div className="mb-3">
+                <label className="form-label">{role === 'profesor' ? 'Código de profesor' : 'Código de estudiante'}:</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={codigo}
+                  onChange={e => setCodigo(e.target.value)}
+                />
+              </div>
+            </>
+          )}
           <div className="mb-3">
             <label className="form-label">Contraseña:</label>
             <input
@@ -99,6 +139,17 @@ function Login({ onLogin }) {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
+          {showRegister && (
+            <div className="mb-3">
+              <label className="form-label">Confirmar contraseña:</label>
+              <input
+                type="password"
+                className="form-control"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+              />
+            </div>
+          )}
           <div className="mb-3">
             <label className="form-label">Rol:</label>
             <select
@@ -116,9 +167,13 @@ function Login({ onLogin }) {
         </form>
         <div className="text-center mt-3">
           {showRegister ? (
-            <button className="btn btn-link" onClick={() => { setShowRegister(false); setRegisterError(''); }}>¿Ya tienes cuenta? Inicia sesión</button>
+            <button className="btn btn-link" onClick={() => { setShowRegister(false); setRegisterError(''); }}>
+              ¿Ya tienes cuenta? Inicia sesión
+            </button>
           ) : (
-            <button className="btn btn-link" onClick={() => { setShowRegister(true); setError(''); }}>¿No tienes cuenta? Crear cuenta</button>
+            <button className="btn btn-link" onClick={() => { setShowRegister(true); setError(''); }}>
+              ¿No tienes cuenta? Crear cuenta
+            </button>
           )}
         </div>
       </div>

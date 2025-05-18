@@ -18,6 +18,7 @@ function App() {
     escuela: '',
     seccion: '',
     imagen: '',
+    codigo: ''
   })
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark';
@@ -36,7 +37,7 @@ function App() {
   // Sincroniza perfil al cambiar de usuario
   useEffect(() => {
     if (!user) {
-      setPerfil({ nombre: '', correo: '', telefono: '', escuela: '', seccion: '', imagen: '' });
+      setPerfil({ nombre: '', correo: '', telefono: '', escuela: '', seccion: '', imagen: '', codigo: '' });
       return;
     }
     // Si el usuario tiene datos en Firestore, cárgalos
@@ -44,22 +45,23 @@ function App() {
       try {
         const { db } = await import('./firebaseConfig');
         const { doc, getDoc } = await import('firebase/firestore');
-        const userDoc = await getDoc(doc(db, 'usuarios', user.username));
+        const userDoc = await getDoc(doc(db, 'usuarios', user.uid || user.username));
         if (userDoc.exists()) {
           const data = userDoc.data();
           setPerfil({
-            nombre: data.nombre || user.username,
+            nombre: data.nombre || user.nombre || user.username,
             correo: data.email || user.email || '',
             telefono: data.telefono || '',
             escuela: data.escuela || '',
             seccion: data.seccion || '',
-            imagen: data.imagen || ''
+            imagen: data.imagen || '',
+            codigo: data.codigo || user.codigo || ''
           });
         } else {
-          setPerfil({ nombre: user.username, correo: user.email || '', telefono: '', escuela: '', seccion: '', imagen: '' });
+          setPerfil({ nombre: user.nombre || user.username, correo: user.email || '', telefono: '', escuela: '', seccion: '', imagen: '', codigo: user.codigo || '' });
         }
       } catch {
-        setPerfil({ nombre: user.username, correo: user.email || '', telefono: '', escuela: '', seccion: '', imagen: '' });
+        setPerfil({ nombre: user.nombre || user.username, correo: user.email || '', telefono: '', escuela: '', seccion: '', imagen: '', codigo: user.codigo || '' });
       }
     };
     fetchPerfil();
@@ -97,7 +99,7 @@ function App() {
   if (!user) {
     return <Login onLogin={(userObj) => {
       setUser(userObj);
-      setPerfil(p => ({ ...p, nombre: userObj.username }));
+      setPerfil(p => ({ ...p, nombre: userObj.nombre || userObj.username, codigo: userObj.codigo || '' }));
     }} />
   }
 
@@ -121,7 +123,7 @@ function App() {
               {perfil?.imagen && (
                 <img src={perfil.imagen} alt="avatar" style={{width:32, height:32, borderRadius:'50%', objectFit:'cover', border:'1.5px solid #fff', marginRight:8}} />
               )}
-              {user.username} ({user.role})
+              {user.nombre || user.username} ({user.role})
             </span>
             <button className="btn btn-outline-light me-2" onClick={() => setDarkMode(dm => !dm)}>
               {darkMode ? 'Light Mode' : 'Dark Mode'}
@@ -137,7 +139,7 @@ function App() {
           <Route path="/" element={user.role === 'profesor' ? (
             <ProfesorPanel cursos={cursos} setCursos={setCursos} user={user} />
           ) : (
-            <AlumnoPanel cursos={cursos} alumno={user.username} />
+            <AlumnoPanel cursos={cursos} alumno={user.nombre || user.username} />
           )} />
         </Routes>
       </div>

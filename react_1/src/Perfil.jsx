@@ -41,7 +41,8 @@ function Perfil({ perfil, user, editable, setPerfil, showEditButton }) {
         imagen: form.imagen || '',
         masInfo: form.masInfo || '',
         horario: form.horario || '',
-        rol: user.role
+        rol: user.role,
+        codigo: form.codigo // No editable, pero se mantiene en el objeto
       }, { merge: true });
     } catch (e) {
       alert('Error al guardar el perfil en la base de datos');
@@ -62,6 +63,7 @@ function Perfil({ perfil, user, editable, setPerfil, showEditButton }) {
             </label>
           </div>
           <input className="form-control mb-2" name="nombre" value={form.nombre} onChange={handleChange} placeholder="Nombre" />
+          <input className="form-control mb-2" name="codigo" value={form.codigo || user.codigo || ''} placeholder={user.role === 'profesor' ? 'Código de profesor' : 'Código de estudiante'} disabled />
           <input className="form-control mb-2" name="correo" value={form.correo} onChange={handleChange} placeholder="Correo" disabled={true} />
           <input className="form-control mb-2" name="telefono" value={form.telefono} onChange={handleChange} placeholder="Teléfono" />
           {isAlumno && <>
@@ -87,6 +89,7 @@ function Perfil({ perfil, user, editable, setPerfil, showEditButton }) {
         </div>
         <h6 className="mb-1" style={{color:'#5C2B2B'}}>{params.nombre || perfil.nombre || user.username}</h6>
         <div className="mb-1" style={{fontWeight:500, color:'#A05252'}}>{user.role === 'profesor' ? 'Profesor' : 'Alumno'}</div>
+        {perfil.codigo && <div style={{fontSize:'0.95em', color:'#888'}}>Código: {perfil.codigo}</div>}
         {perfil.escuela && <div style={{fontSize:'0.95em', color:'#888'}}>Escuela: {perfil.escuela}</div>}
         {perfil.seccion && <div style={{fontSize:'0.95em', color:'#888'}}>Sección: {perfil.seccion}</div>}
         {perfil.correo && <div style={{fontSize:'0.95em', color:'#888'}}>Correo: {perfil.correo}</div>}
