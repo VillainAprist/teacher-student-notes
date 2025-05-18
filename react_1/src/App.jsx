@@ -17,7 +17,7 @@ function App() {
     telefono: '',
     escuela: '',
     seccion: '',
-    imagen: '', // Added to store profile image
+    imagen: '',
   })
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark';
@@ -33,12 +33,71 @@ function App() {
     }
   }, [darkMode]);
 
+  // Sincroniza perfil al cambiar de usuario
+  useEffect(() => {
+    if (!user) {
+      setPerfil({ nombre: '', correo: '', telefono: '', escuela: '', seccion: '', imagen: '' });
+      return;
+    }
+    // Si el usuario tiene datos en Firestore, cárgalos
+    const fetchPerfil = async () => {
+      try {
+        const { db } = await import('./firebaseConfig');
+        const { doc, getDoc } = await import('firebase/firestore');
+        const userDoc = await getDoc(doc(db, 'usuarios', user.username));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setPerfil({
+            nombre: data.nombre || user.username,
+            correo: data.email || user.email || '',
+            telefono: data.telefono || '',
+            escuela: data.escuela || '',
+            seccion: data.seccion || '',
+            imagen: data.imagen || ''
+          });
+        } else {
+          setPerfil({ nombre: user.username, correo: user.email || '', telefono: '', escuela: '', seccion: '', imagen: '' });
+        }
+      } catch {
+        setPerfil({ nombre: user.username, correo: user.email || '', telefono: '', escuela: '', seccion: '', imagen: '' });
+      }
+    };
+    fetchPerfil();
+  }, [user]);
+
+  // Cargar cursos filtrados según usuario autenticado y rol
+  useEffect(() => {
+    const fetchCursos = async () => {
+      if (!user) return;
+      const { db } = await import('./firebaseConfig');
+      const { collection, getDocs, query, where } = await import('firebase/firestore');
+      let cursosCol;
+      if (user.role === 'profesor') {
+        // Filtra cursos por email del profesor autenticado
+        cursosCol = query(collection(db, 'cursos'), where('profesor', '==', user.username));
+      } else if (user.role === 'alumno') {
+        // Obtiene todos los cursos y filtra por inscripción del alumno
+        cursosCol = collection(db, 'cursos');
+      }
+      const cursosSnapshot = await getDocs(cursosCol);
+      let cursosData = cursosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      if (user.role === 'alumno') {
+        cursosData = cursosData.filter(curso =>
+          Array.isArray(curso.estudiantes) &&
+          curso.estudiantes.some(e => e.nombre === user.username || e.email === user.username)
+        );
+      }
+      setCursos(cursosData);
+    };
+    fetchCursos();
+  }, [user]);
+
   const handleLogout = () => setUser(null)
 
   if (!user) {
-    return <Login onLogin={(username, password, role) => {
-      setUser({ username, role })
-      setPerfil(p => ({ ...p, nombre: username }))
+    return <Login onLogin={(userObj) => {
+      setUser(userObj);
+      setPerfil(p => ({ ...p, nombre: userObj.username }));
     }} />
   }
 
@@ -76,7 +135,7 @@ function App() {
         <Routes>
           <Route path="/perfil" element={<Perfil perfil={perfil} user={user} editable setPerfil={setPerfil} />} />
           <Route path="/" element={user.role === 'profesor' ? (
-            <ProfesorPanel cursos={cursos} setCursos={setCursos} />
+            <ProfesorPanel cursos={cursos} setCursos={setCursos} user={user} />
           ) : (
             <AlumnoPanel cursos={cursos} alumno={user.username} />
           )} />

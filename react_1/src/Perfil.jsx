@@ -23,9 +23,29 @@ function Perfil({ perfil, user, editable, setPerfil, showEditButton }) {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setPerfil(form);
     setEdit(false);
+    // Guardar cambios en Firestore
+    try {
+      const { db } = await import('./firebaseConfig');
+      const { doc, setDoc } = await import('firebase/firestore');
+      // El id del usuario debe ser el UID, no el email
+      const userId = user.uid || user.username; // Prioriza UID si está disponible
+      await setDoc(doc(db, 'usuarios', userId), {
+        nombre: form.nombre,
+        email: form.correo,
+        telefono: form.telefono,
+        escuela: form.escuela,
+        seccion: form.seccion,
+        imagen: form.imagen || '',
+        masInfo: form.masInfo || '',
+        horario: form.horario || '',
+        rol: user.role
+      }, { merge: true });
+    } catch (e) {
+      alert('Error al guardar el perfil en la base de datos');
+    }
   };
 
   const isAlumno = user.role === 'alumno';
@@ -42,7 +62,7 @@ function Perfil({ perfil, user, editable, setPerfil, showEditButton }) {
             </label>
           </div>
           <input className="form-control mb-2" name="nombre" value={form.nombre} onChange={handleChange} placeholder="Nombre" />
-          <input className="form-control mb-2" name="correo" value={form.correo} onChange={handleChange} placeholder="Correo" />
+          <input className="form-control mb-2" name="correo" value={form.correo} onChange={handleChange} placeholder="Correo" disabled={true} />
           <input className="form-control mb-2" name="telefono" value={form.telefono} onChange={handleChange} placeholder="Teléfono" />
           {isAlumno && <>
             <input className="form-control mb-2" name="escuela" value={form.escuela} onChange={handleChange} placeholder="Escuela" />
