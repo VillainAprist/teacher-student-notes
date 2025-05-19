@@ -1,9 +1,8 @@
+// Importaciones de librerías externas
 import Papa from 'papaparse';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bar } from 'react-chartjs-2';
-import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,11 +12,16 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
-import { db } from './firebaseConfig';
-import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, query, where } from 'firebase/firestore';
 
+// Importaciones de servicios internos
+import { db } from '../services/firebase.js';
+import { collection, addDoc, updateDoc, doc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
+import { useCursos } from '../hooks/useCursos';
+
+// Registro de componentes de ChartJS
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
+// Constantes
 const ESCUELAS = [
   'Informática',
   'Mecatrónica',
@@ -41,24 +45,12 @@ function ProfesorPanel({ cursos, setCursos, user }) {
   const [editNotas, setEditNotas] = useState({ pc1: '', pc2: '', parcial: '', final: '', extras: '' });
   const [showChartIdx, setShowChartIdx] = useState(null);
   const [pendingChanges, setPendingChanges] = useState(false);
+  const [errorEstudiante, setErrorEstudiante] = useState('');
   const navigate = useNavigate();
   const fileInputRef = useRef();
 
-  // Cargar cursos desde Firestore al iniciar
-  useEffect(() => {
-    const fetchCursos = async () => {
-      let cursosCol;
-      if (user?.email) {
-        cursosCol = query(collection(db, 'cursos'), where('profesor', '==', user.email));
-      } else {
-        cursosCol = collection(db, 'cursos');
-      }
-      const cursosSnapshot = await getDocs(cursosCol);
-      const cursosData = cursosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setCursos(cursosData);
-    };
-    fetchCursos();
-  }, [user]);
+  // Usa el hook para obtener los cursos del profesor
+  const cursosDB = useCursos({ profesorEmail: user?.email });
 
   const handleCSV = (e, idx) => {
     const file = e.target.files[0];
@@ -77,7 +69,7 @@ function ProfesorPanel({ cursos, setCursos, user }) {
             ...Object.fromEntries(Object.keys(row).filter(k => k.startsWith('opc')).map(k => [k, row[k]]))
           }
         }));
-        const nuevosCursos = [...cursos];
+        const nuevosCursos = [...cursosDB];
         nuevosCursos[idx].estudiantes = nuevosCursos[idx].estudiantes.concat(nuevosEstudiantes);
         setCursos(nuevosCursos);
         setPendingChanges(true);
@@ -97,10 +89,10 @@ function ProfesorPanel({ cursos, setCursos, user }) {
         profesorUid: user.uid // UID del profesor autenticado
       };
       const docRef = await addDoc(collection(db, 'cursos'), nuevo);
-      setCursos([...cursos, { ...nuevo, id: docRef.id }]);
+      // No actualices setCursos aquí, espera a que el hook useCursos se actualice automáticamente
       setNuevoCurso('');
       setNuevaSeccion('');
-      setSelectedCurso(cursos.length);
+      setSelectedCurso(null); // Deselecciona para evitar errores de índice
     }
   };
 
@@ -118,9 +110,31 @@ function ProfesorPanel({ cursos, setCursos, user }) {
   };
 
   // Guardar estudiantes y notas localmente al agregar estudiante
-  const agregarEstudiante = () => {
+  const agregarEstudiante = async () => {
+    setErrorEstudiante('');
     if (nuevoEstudiante.trim() !== '' && notas.pc1 && notas.pc2 && notas.parcial && notas.final) {
-      const nuevosCursos = [...cursos];
+      // Buscar el usuario en la colección usuarios
+      let usuarioSnap = await getDocs(query(collection(db, 'usuarios'), where('nombre', '==', nuevoEstudiante)));
+      if (usuarioSnap.empty) {
+        usuarioSnap = await getDocs(query(collection(db, 'usuarios'), where('email', '==', nuevoEstudiante)));
+      }
+      if (usuarioSnap.empty) {
+        usuarioSnap = await getDocs(query(collection(db, 'usuarios'), where('codigo', '==', nuevoEstudiante)));
+      }
+      let uid = '';
+      let email = '';
+      let codigo = '';
+      if (!usuarioSnap.empty) {
+        const userDoc = usuarioSnap.docs[0];
+        uid = userDoc.id;
+        email = userDoc.data().email || '';
+        codigo = userDoc.data().codigo || '';
+      }
+      if (!uid) {
+        setErrorEstudiante('El estudiante no está registrado. Debe crear su cuenta primero.');
+        return;
+      }
+      const nuevosCursos = [...cursosDB];
       // Convierte todas las notas a número antes de guardar
       const notasNumericas = {
         pc1: notas.pc1 !== '' ? String(Number(notas.pc1)) : '0',
@@ -131,6 +145,9 @@ function ProfesorPanel({ cursos, setCursos, user }) {
       };
       nuevosCursos[selectedCurso].estudiantes.push({
         nombre: nuevoEstudiante,
+        uid,
+        email,
+        codigo,
         notas: notasNumericas
       });
       setCursos(nuevosCursos);
@@ -141,6 +158,21 @@ function ProfesorPanel({ cursos, setCursos, user }) {
         { nombre: 'opc1', label: 'Opc 1', valor: '' },
         { nombre: 'opc2', label: 'Opc 2', valor: '' }
       ]);
+      // --- NUEVO: Crear inscripción en la colección 'inscripciones' ---
+      try {
+        if (cursosDB[selectedCurso]?.id && uid) {
+          await addDoc(collection(db, 'inscripciones'), {
+            cursoId: cursosDB[selectedCurso].id,
+            alumnoUid: uid,
+            alumnoEmail: email,
+            alumnoCodigo: codigo,
+            fecha: new Date()
+          });
+        }
+      } catch (err) {
+        // Puedes mostrar un mensaje de error si lo deseas
+        console.error('Error al crear inscripción:', err);
+      }
     }
   };
 
@@ -149,94 +181,12 @@ function ProfesorPanel({ cursos, setCursos, user }) {
     setShowChartIdx(null);
   };
 
-  const exportarExcel = () => {
-    if (!cursos.length) return;
-    const sheets = {};
-    cursos.forEach((curso) => {
-      const headers = ['Nombre', 'PC1', 'PC2', 'Parcial', 'Final', ...Object.values(curso.estudiantes[0]?.notas || {}).filter((_, i) => i >= 4 ? true : false).map((_, idx) => `Opc${idx+1}`), 'Nota Final'];
-      const data = curso.estudiantes.map(est => {
-        const pc1 = +est.notas.pc1 || 0;
-        const pc2 = +est.notas.pc2 || 0;
-        // Calcula promedio de extras
-        const extrasKeys = Object.keys(est.notas).filter(k => k.startsWith('opc') && est.notas[k] !== '' && !isNaN(est.notas[k]));
-        let promedioExtras = 0;
-        if (extrasKeys.length > 0) {
-          promedioExtras = extrasKeys.reduce((acc, k) => acc + (+est.notas[k] || 0), 0) / extrasKeys.length;
-        }
-        let promedioPC = 0;
-        if (extrasKeys.length > 0) {
-          promedioPC = ((pc1 + pc2) / 2) * 0.5 + promedioExtras * 0.5;
-        } else {
-          promedioPC = (pc1 + pc2) / 2;
-        }
-        let notaFinal = (promedioPC * 0.4) + ((+est.notas.parcial || 0) * 0.3) + ((+est.notas.final || 0) * 0.3);
-        if (notaFinal > 20) notaFinal = 20;
-        return {
-          Nombre: est.nombre,
-          PC1: est.notas.pc1,
-          PC2: est.notas.pc2,
-          Parcial: est.notas.parcial,
-          Final: est.notas.final,
-          ...Object.fromEntries(Object.keys(est.notas).filter(k => k.startsWith('opc')).map(k => [k.toUpperCase(), est.notas[k]])),
-          'Nota Final': notaFinal.toFixed(2)
-        };
-      });
-      sheets[curso.nombre] = XLSX.utils.json_to_sheet(data);
-    });
-    const wb = XLSX.utils.book_new();
-    Object.entries(sheets).forEach(([nombre, sheet]) => {
-      XLSX.utils.book_append_sheet(wb, sheet, nombre.substring(0, 31));
-    });
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    saveAs(new Blob([wbout], { type: 'application/octet-stream' }), 'cursos_fiei.xlsx');
-  };
-
-  const exportarCSV = () => {
-    if (!cursos.length) return;
-    let csv = '';
-    cursos.forEach((curso, idx) => {
-      csv += `Curso: ${curso.nombre}\n`;
-      const headers = ['Nombre', 'PC1', 'PC2', 'Parcial', 'Final', ...Object.keys(curso.estudiantes[0]?.notas||{}).filter(k=>k.startsWith('opc')).map(k=>k.toUpperCase()), 'Nota Final'];
-      csv += headers.join(',') + '\n';
-      curso.estudiantes.forEach(est => {
-        const pc1 = +est.notas.pc1 || 0;
-        const pc2 = +est.notas.pc2 || 0;
-        const extrasKeys = Object.keys(est.notas).filter(k => k.startsWith('opc') && est.notas[k] !== '' && !isNaN(est.notas[k]));
-        let promedioExtras = 0;
-        if (extrasKeys.length > 0) {
-          promedioExtras = extrasKeys.reduce((acc, k) => acc + (+est.notas[k] || 0), 0) / extrasKeys.length;
-        }
-        let promedioPC = 0;
-        if (extrasKeys.length > 0) {
-          promedioPC = ((pc1 + pc2) / 2) * 0.5 + promedioExtras * 0.5;
-        } else {
-          promedioPC = (pc1 + pc2) / 2;
-        }
-        let notaFinal = (promedioPC * 0.4) + ((+est.notas.parcial || 0) * 0.3) + ((+est.notas.final || 0) * 0.3);
-        if (notaFinal > 20) notaFinal = 20;
-        const row = [
-          est.nombre,
-          est.notas.pc1,
-          est.notas.pc2,
-          est.notas.parcial,
-          est.notas.final,
-          ...Object.keys(est.notas).filter(k=>k.startsWith('opc')).map(k=>est.notas[k]),
-          notaFinal.toFixed(2)
-        ];
-        csv += row.join(',') + '\n';
-      });
-      if (idx < cursos.length-1) csv += '\n';
-    });
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    saveAs(blob, 'cursos_fiei.csv');
-  };
-
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
 
   const guardarNotasEditadas = async (i) => {
-    const nuevosCursos = [...cursos];
+    const nuevosCursos = [...cursosDB];
     nuevosCursos[selectedCurso].estudiantes[i].notas = { ...editNotas };
     setCursos(nuevosCursos);
     setPendingChanges(true);
@@ -244,31 +194,100 @@ function ProfesorPanel({ cursos, setCursos, user }) {
   };
 
   const eliminarEstudiante = async (i) => {
-    const nuevosCursos = [...cursos];
+    const nuevosCursos = [...cursosDB];
     nuevosCursos[selectedCurso].estudiantes.splice(i, 1);
     setCursos(nuevosCursos);
     setPendingChanges(true);
   };
 
   const guardarCambios = async () => {
-    if (selectedCurso === null || !cursos[selectedCurso].id) return;
-    await updateDoc(doc(db, 'cursos', cursos[selectedCurso].id), { estudiantes: cursos[selectedCurso].estudiantes });
+    if (selectedCurso === null || !cursosDB[selectedCurso].id) return;
+    await updateDoc(doc(db, 'cursos', cursosDB[selectedCurso].id), { estudiantes: cursosDB[selectedCurso].estudiantes });
     setPendingChanges(false);
   };
 
   const eliminarCurso = async (idx) => {
-    const curso = cursos[idx];
+    const curso = cursosDB[idx];
     if (!curso.id) return;
     if (window.confirm('¿Estás seguro de eliminar este curso? Esta acción no se puede deshacer.')) {
       await deleteDoc(doc(db, 'cursos', curso.id));
-      const nuevosCursos = cursos.filter((_, i) => i !== idx);
+      const nuevosCursos = cursosDB.filter((_, i) => i !== idx);
       setCursos(nuevosCursos);
       // Si el curso eliminado era el seleccionado, deselecciona
       if (selectedCurso === idx) setSelectedCurso(null);
     }
   };
 
-  const estudiantesFiltrados = selectedCurso !== null ? cursos[selectedCurso].estudiantes.filter(est => est.nombre.toLowerCase().includes(busqueda.toLowerCase())) : [];
+  const estudiantesFiltrados = selectedCurso !== null ? cursosDB[selectedCurso].estudiantes.filter(est => est.nombre.toLowerCase().includes(busqueda.toLowerCase())) : [];
+
+  // Función para buscar y navegar al perfil del estudiante
+  const handleVerPerfilAlumno = async (nombre, codigo, uid) => {
+    if (uid) {
+      navigate(`/perfil/${uid}`);
+      return;
+    }
+    // Fallback: buscar por nombre o código en la colección de usuarios/alumnos
+    const alumnosRef = collection(db, 'alumnos');
+    const q = query(alumnosRef, where('nombre', '==', nombre));
+    const q2 = query(alumnosRef, where('codigo', '==', codigo));
+    let alumnoDoc = null;
+    const snapshotNombre = await getDocs(q);
+    if (!snapshotNombre.empty) {
+      alumnoDoc = snapshotNombre.docs[0];
+    } else {
+      const snapshotCodigo = await getDocs(q2);
+      if (!snapshotCodigo.empty) {
+        alumnoDoc = snapshotCodigo.docs[0];
+      }
+    }
+    if (alumnoDoc) {
+      navigate(`/perfil/${encodeURIComponent(alumnoDoc.id)}`);
+    } else {
+      alert('Perfil no encontrado para este alumno.');
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (selectedCurso === null) return;
+    const estudiantes = cursosDB[selectedCurso].estudiantes || [];
+    // Solo exportar estudiantes registrados (con uid)
+    const estudiantesRegistrados = estudiantes.filter(est => est.uid && est.uid !== '');
+    if (estudiantesRegistrados.length === 0) {
+      alert('No hay estudiantes registrados para exportar.');
+      return;
+    }
+    // Construir columnas dinámicamente
+    const baseColumns = ['nombre', 'email', 'codigo', 'pc1', 'pc2', 'parcial', 'final'];
+    const extrasColumns = notasExtras.map(n => n.nombre);
+    const allColumns = [...baseColumns, ...extrasColumns];
+    // Construir datos para exportar
+    const data = estudiantesRegistrados.map(est => {
+      const row = {
+        nombre: est.nombre || '',
+        email: est.email || '',
+        codigo: est.codigo || '',
+        pc1: est.notas?.pc1 || '',
+        pc2: est.notas?.pc2 || '',
+        parcial: est.notas?.parcial || '',
+        final: est.notas?.final || ''
+      };
+      extrasColumns.forEach(col => {
+        row[col] = est.notas?.[col] || '';
+      });
+      return row;
+    });
+    const csv = Papa.unparse({ fields: allColumns, data });
+    // Descargar el archivo
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${cursosDB[selectedCurso].nombre || 'curso'}_estudiantes.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="container mt-4">
@@ -307,7 +326,7 @@ function ProfesorPanel({ cursos, setCursos, user }) {
       <div className="row" style={{ marginLeft: 0, marginRight: 0, paddingLeft: 0, paddingRight: 0 }}>
         <div className="col-md-3" style={{ paddingLeft: 0, paddingRight: 0 }}>
           <ul className="list-group">
-            {cursos.map((curso, idx) => (
+            {cursosDB.map((curso, idx) => (
               <li key={idx} className={`list-group-item d-flex justify-content-between align-items-center ${selectedCurso === idx ? 'active' : ''}`}
                 onClick={() => handleSelectCurso(idx)} style={{ cursor: 'pointer', marginBottom: 10, padding: '16px 12px' }}>
                 <div>
@@ -333,17 +352,17 @@ function ProfesorPanel({ cursos, setCursos, user }) {
           </ul>
         </div>
         <div className="col-md-9" style={{ paddingLeft: 0, paddingRight: 0 }}>
-          {showChartIdx !== null && cursos[showChartIdx] && selectedCurso === showChartIdx && (
+          {showChartIdx !== null && cursosDB[showChartIdx] && selectedCurso === showChartIdx && (
             <div className="mb-4">
-              <h5 className="mb-3">Desempeño de estudiantes en {cursos[showChartIdx].nombre}</h5>
+              <h5 className="mb-3">Desempeño de estudiantes en {cursosDB[showChartIdx].nombre}</h5>
               <Bar
                 data={{
-                  labels: cursos[showChartIdx].estudiantes.map(e => e.nombre),
+                  labels: cursosDB[showChartIdx].estudiantes.map(e => e.nombre),
                   datasets: [
                     {
                       label: 'Nota Final',
                       backgroundColor: '#A05252',
-                      data: cursos[showChartIdx].estudiantes.map(est => {
+                      data: cursosDB[showChartIdx].estudiantes.map(est => {
                         const pc1 = +est.notas.pc1 || 0;
                         const pc2 = +est.notas.pc2 || 0;
                         const extrasKeys = Object.keys(est.notas).filter(k => k.startsWith('opc') && est.notas[k] !== '' && !isNaN(est.notas[k]));
@@ -380,7 +399,7 @@ function ProfesorPanel({ cursos, setCursos, user }) {
           )}
           {selectedCurso !== null && (
             <div>
-              <h4>Estudiantes en {cursos[selectedCurso].nombre}</h4>
+              <h4>Estudiantes en {cursosDB[selectedCurso].nombre}</h4>
               <div className="card mb-4 p-3">
                 <div className="input-group mb-2">
                   <input
@@ -491,6 +510,9 @@ function ProfesorPanel({ cursos, setCursos, user }) {
                   <button className="btn btn-secondary" type="button" onClick={agregarNotaExtra}>+ Nota</button>
                   <button className="btn btn-primary" type="button" onClick={agregarEstudiante}>Agregar Estudiante</button>
                 </div>
+                {errorEstudiante && (
+                  <div className="alert alert-danger my-2">{errorEstudiante}</div>
+                )}
               </div>
               <div className="mb-2">
                 <input
@@ -518,8 +540,14 @@ function ProfesorPanel({ cursos, setCursos, user }) {
                 </thead>
                 <tbody>
                   {estudiantesFiltrados.map((est, i) => {
-                    const pc1 = +est.notas.pc1 || 0;
-                    const pc2 = +est.notas.pc2 || 0;
+                    // Asegurarse de que las notas extras estén alineadas correctamente
+                    const pc1 = est.notas?.pc1 ?? '';
+                    const pc2 = est.notas?.pc2 ?? '';
+                    const parcial = est.notas?.parcial ?? '';
+                    const final = est.notas?.final ?? '';
+                    // Mostrar extras en el mismo orden que notasExtras
+                    const extrasValues = notasExtras.map(n => est.notas?.[n.nombre] ?? '');
+                    // Calcular promedio correctamente
                     const extrasKeys = notasExtras.map(n => n.nombre).filter(k => est.notas[k] !== '' && !isNaN(est.notas[k]));
                     let promedioExtras = 0;
                     if (extrasKeys.length > 0) {
@@ -527,11 +555,11 @@ function ProfesorPanel({ cursos, setCursos, user }) {
                     }
                     let promedioPC = 0;
                     if (extrasKeys.length > 0) {
-                      promedioPC = ((pc1 + pc2) / 2) * 0.5 + promedioExtras * 0.5;
+                      promedioPC = ((+pc1 + +pc2) / 2) * 0.5 + promedioExtras * 0.5;
                     } else {
-                      promedioPC = (pc1 + pc2) / 2;
+                      promedioPC = (+pc1 + +pc2) / 2;
                     }
-                    let notaFinal = (promedioPC * 0.4) + ((+est.notas.parcial || 0) * 0.3) + ((+est.notas.final || 0) * 0.3);
+                    let notaFinal = (promedioPC * 0.4) + ((+parcial || 0) * 0.3) + ((+final || 0) * 0.3);
                     if (notaFinal > 20) notaFinal = 20;
                     return editAlumnoIdx === i ? (
                       <tr key={i}>
@@ -554,17 +582,17 @@ function ProfesorPanel({ cursos, setCursos, user }) {
                         <td>
                           <span
                             style={{ color: '#A05252', cursor: 'pointer', textDecoration: 'underline' }}
-                            onClick={() => navigate(`/perfil/${encodeURIComponent(est.nombre)}`)}
+                            onClick={() => handleVerPerfilAlumno(est.nombre, est.codigo, est.uid)}
                           >
                             {est.nombre}
                           </span>
                         </td>
-                        <td>{est.notas.pc1}</td>
-                        <td>{est.notas.pc2}</td>
-                        <td>{est.notas.parcial}</td>
-                        <td>{est.notas.final}</td>
-                        {notasExtras.map((nota, idx) => (
-                          <td key={nota.nombre}>{est.notas[nota.nombre]}</td>
+                        <td>{pc1}</td>
+                        <td>{pc2}</td>
+                        <td>{parcial}</td>
+                        <td>{final}</td>
+                        {extrasValues.map((val, idx) => (
+                          <td key={idx}>{val}</td>
                         ))}
                         <td>{notaFinal.toFixed(2)}</td>
                         <td>

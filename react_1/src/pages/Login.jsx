@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { auth, db } from './firebaseConfig';
+import { auth, db } from '../services/firebase.js';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { setDoc, doc, getDoc } from 'firebase/firestore';
 
@@ -7,12 +7,13 @@ function Login({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState('alumno');
   const [nombre, setNombre] = useState('');
   const [codigo, setCodigo] = useState('');
   const [error, setError] = useState('');
   const [showRegister, setShowRegister] = useState(false);
   const [registerError, setRegisterError] = useState('');
+  const [rol, setRol] = useState('alumno');
+  const [escuela, setEscuela] = useState('Informática');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -53,7 +54,7 @@ function Login({ onLogin }) {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (!username || !password || !nombre || !codigo || !confirmPassword) {
+    if (!username || !password || !nombre || !codigo || !confirmPassword || (rol === 'alumno' && !escuela)) {
       setRegisterError('Por favor, completa todos los campos.');
       return;
     }
@@ -66,9 +67,10 @@ function Login({ onLogin }) {
       try {
         await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
           email: username,
-          rol: role,
+          rol: rol,
           nombre: nombre,
           codigo: codigo,
+          escuela: rol === 'alumno' ? escuela : '',
           createdAt: new Date().toISOString()
         });
       } catch (firestoreError) {
@@ -111,6 +113,24 @@ function Login({ onLogin }) {
           {showRegister && (
             <>
               <div className="mb-3">
+                <label className="form-label">Rol:</label>
+                <select className="form-select" value={rol} onChange={e => setRol(e.target.value)}>
+                  <option value="alumno">Alumno</option>
+                  <option value="profesor">Profesor</option>
+                </select>
+              </div>
+              {rol === 'alumno' && (
+                <div className="mb-3">
+                  <label className="form-label">Escuela:</label>
+                  <select className="form-select" value={escuela} onChange={e => setEscuela(e.target.value)}>
+                    <option value="Informática">Informática</option>
+                    <option value="Mecatrónica">Mecatrónica</option>
+                    <option value="Electrónica">Electrónica</option>
+                    <option value="Telecomunicaciones">Telecomunicaciones</option>
+                  </select>
+                </div>
+              )}
+              <div className="mb-3">
                 <label className="form-label">Nombre:</label>
                 <input
                   type="text"
@@ -120,7 +140,7 @@ function Login({ onLogin }) {
                 />
               </div>
               <div className="mb-3">
-                <label className="form-label">{role === 'profesor' ? 'Código de profesor' : 'Código de estudiante'}:</label>
+                <label className="form-label">Código:</label>
                 <input
                   type="text"
                   className="form-control"
@@ -150,17 +170,6 @@ function Login({ onLogin }) {
               />
             </div>
           )}
-          <div className="mb-3">
-            <label className="form-label">Rol:</label>
-            <select
-              className="form-select"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-            >
-              <option value="alumno">Alumno</option>
-              <option value="profesor">Profesor</option>
-            </select>
-          </div>
           {showRegister && registerError && <p className="text-danger">{registerError}</p>}
           {!showRegister && error && <p className="text-danger">{error}</p>}
           <button type="submit" className="btn btn-primary w-100 py-2">{showRegister ? 'Crear Cuenta' : 'Entrar'}</button>
