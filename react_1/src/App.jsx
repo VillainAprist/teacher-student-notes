@@ -1,5 +1,5 @@
 // React & Hooks
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 
 // React Router
 import { BrowserRouter as Router, Link } from 'react-router-dom';
@@ -17,33 +17,14 @@ import { db } from './services/firebase.js';
 // Rutas centralizadas
 import AppRoutes from './routes';
 
-function App() {
-  const [user, setUserState] = useState(() => {
-    const stored = localStorage.getItem('user');
-    return stored ? JSON.parse(stored) : null;
-  });
-  const [cursos, setCursos] = useState([]);
-  const [perfil, setPerfil] = useState({
-    nombre: '',
-    correo: '',
-    telefono: '',
-    escuela: '',
-    seccion: '',
-    imagen: '',
-    codigo: ''
-  });
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem('theme') === 'dark';
-  });
+// Componentes
+import ThemeSwitcher from './components/ThemeSwitcher';
 
-  const setUser = (u) => {
-    setUserState(u);
-    if (u) {
-      localStorage.setItem('user', JSON.stringify(u));
-    } else {
-      localStorage.removeItem('user');
-    }
-  };
+// Contexto
+import { useAppContext } from './context/AppContext';
+
+function App() {
+  const { user, setUser, cursos, setCursos, perfil, setPerfil, darkMode, setDarkMode } = useAppContext();
 
   useEffect(() => {
     if (darkMode) {
@@ -54,59 +35,6 @@ function App() {
       localStorage.setItem('theme', 'light');
     }
   }, [darkMode]);
-
-  useEffect(() => {
-    if (!user) {
-      setPerfil({ nombre: '', correo: '', telefono: '', escuela: '', seccion: '', imagen: '', codigo: '' });
-      return;
-    }
-    const fetchPerfil = async () => {
-      try {
-        const { doc, getDoc } = await import('firebase/firestore');
-        const userDoc = await getDoc(doc(db, 'usuarios', user.uid || user.username));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setPerfil({
-            nombre: data.nombre || user.nombre || user.username,
-            correo: data.email || user.email || '',
-            telefono: data.telefono || '',
-            escuela: data.escuela || '',
-            seccion: data.seccion || '',
-            imagen: data.imagen || '',
-            codigo: data.codigo || user.codigo || ''
-          });
-        } else {
-          setPerfil({ nombre: user.nombre || user.username, correo: user.email || '', telefono: '', escuela: '', seccion: '', imagen: '', codigo: user.codigo || '' });
-        }
-      } catch {
-        setPerfil({ nombre: user.nombre || user.username, correo: user.email || '', telefono: '', escuela: '', seccion: '', imagen: '', codigo: user.codigo || '' });
-      }
-    };
-    fetchPerfil();
-  }, [user]);
-
-  useEffect(() => {
-    const fetchCursos = async () => {
-      if (!user) return;
-      const { collection, getDocs, query, where } = await import('firebase/firestore');
-      let cursosCol;
-      if (user.role === 'profesor') {
-        cursosCol = query(collection(db, 'cursos'), where('profesor', '==', user.username));
-      } else if (user.role === 'alumno') {
-        cursosCol = collection(db, 'cursos');
-      }
-      const cursosSnapshot = await getDocs(cursosCol);
-      let cursosData = cursosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (user.role === 'alumno') {
-        cursosData = cursosData.filter(curso =>
-          Array.isArray(curso.estudiantes) &&
-          curso.estudiantes.some(e => e.nombre === user.username || e.email === user.username)
-        );
-      }
-      setCursos(cursosData);
-    };
-    fetchCursos();
-  }, [user]);
 
   const handleLogout = () => {
     setUser(null);
@@ -129,7 +57,7 @@ function App() {
                   <Link className="nav-link" style={{color:'#fff'}} to="/">Inicio</Link>
                 </li>
                 <li className="nav-item">
-                  <Link className="nav-link" style={{color:'#fff'}} to={`/perfil/${encodeURIComponent(user?.nombre || user?.username)}`}>Perfil</Link>
+                  <Link className="nav-link" style={{color:'#fff'}} to={`/perfil/${user?.uid}`}>Perfil</Link>
                 </li>
               </ul>
               <span className="navbar-text me-3 d-flex align-items-center" style={{color: '#fff'}}>
@@ -138,9 +66,7 @@ function App() {
                 )}
                 {user?.nombre || user?.username} ({user?.role})
               </span>
-              <button className="btn btn-outline-light me-2" onClick={() => setDarkMode(dm => !dm)}>
-                {darkMode ? 'Light Mode' : 'Dark Mode'}
-              </button>
+              <ThemeSwitcher darkMode={darkMode} setDarkMode={setDarkMode} />
               <button className="btn btn-outline-light" onClick={handleLogout}>Logout</button>
             </div>
           </div>

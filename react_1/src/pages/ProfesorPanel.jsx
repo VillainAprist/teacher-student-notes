@@ -15,8 +15,14 @@ import {
 
 // Importaciones de servicios internos
 import { db } from '../services/firebase.js';
-import { collection, addDoc, updateDoc, doc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCursos } from '../hooks/useCursos';
+import { calcularNotaFinal } from '../utils/calculoNotas';
+import { cursosService } from '../services/cursosService';
+
+// Importaciones de componentes internos
+import AgregarEstudianteForm from '../components/AgregarEstudianteForm';
+import EstudiantesTabla from '../components/EstudiantesTabla';
 
 // Registro de componentes de ChartJS
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -41,8 +47,6 @@ function ProfesorPanel({ cursos, setCursos, user }) {
     { nombre: 'opc2', label: 'Opc 2', valor: '' }
   ]);
   const [busqueda, setBusqueda] = useState('');
-  const [editAlumnoIdx, setEditAlumnoIdx] = useState(null);
-  const [editNotas, setEditNotas] = useState({ pc1: '', pc2: '', parcial: '', final: '', extras: '' });
   const [showChartIdx, setShowChartIdx] = useState(null);
   const [pendingChanges, setPendingChanges] = useState(false);
   const [errorEstudiante, setErrorEstudiante] = useState('');
@@ -80,19 +84,16 @@ function ProfesorPanel({ cursos, setCursos, user }) {
   // Guardar nuevo curso en Firestore
   const agregarCurso = async () => {
     if (nuevoCurso.trim() !== '' && nuevaSeccion.trim() !== '') {
-      const nuevo = {
+      await cursosService.agregarCurso({
         nombre: nuevoCurso,
         escuela: nuevaEscuela,
         seccion: nuevaSeccion,
-        estudiantes: [],
-        profesor: user.email, // Email del profesor autenticado
-        profesorUid: user.uid // UID del profesor autenticado
-      };
-      const docRef = await addDoc(collection(db, 'cursos'), nuevo);
-      // No actualices setCursos aquí, espera a que el hook useCursos se actualice automáticamente
+        profesor: user.email,
+        profesorUid: user.uid
+      });
       setNuevoCurso('');
       setNuevaSeccion('');
-      setSelectedCurso(null); // Deselecciona para evitar errores de índice
+      setSelectedCurso(null);
     }
   };
 
@@ -114,21 +115,16 @@ function ProfesorPanel({ cursos, setCursos, user }) {
     setErrorEstudiante('');
     if (nuevoEstudiante.trim() !== '' && notas.pc1 && notas.pc2 && notas.parcial && notas.final) {
       // Buscar el usuario en la colección usuarios
-      let usuarioSnap = await getDocs(query(collection(db, 'usuarios'), where('nombre', '==', nuevoEstudiante)));
-      if (usuarioSnap.empty) {
-        usuarioSnap = await getDocs(query(collection(db, 'usuarios'), where('email', '==', nuevoEstudiante)));
-      }
-      if (usuarioSnap.empty) {
-        usuarioSnap = await getDocs(query(collection(db, 'usuarios'), where('codigo', '==', nuevoEstudiante)));
-      }
+      let usuarioSnap = await cursosService.buscarUsuarioPorCampo('nombre', nuevoEstudiante);
+      if (!usuarioSnap) usuarioSnap = await cursosService.buscarUsuarioPorCampo('email', nuevoEstudiante);
+      if (!usuarioSnap) usuarioSnap = await cursosService.buscarUsuarioPorCampo('codigo', nuevoEstudiante);
       let uid = '';
       let email = '';
       let codigo = '';
-      if (!usuarioSnap.empty) {
-        const userDoc = usuarioSnap.docs[0];
-        uid = userDoc.id;
-        email = userDoc.data().email || '';
-        codigo = userDoc.data().codigo || '';
+      if (usuarioSnap) {
+        uid = usuarioSnap.id;
+        email = usuarioSnap.data().email || '';
+        codigo = usuarioSnap.data().codigo || '';
       }
       if (!uid) {
         setErrorEstudiante('El estudiante no está registrado. Debe crear su cuenta primero.');
@@ -161,12 +157,11 @@ function ProfesorPanel({ cursos, setCursos, user }) {
       // --- NUEVO: Crear inscripción en la colección 'inscripciones' ---
       try {
         if (cursosDB[selectedCurso]?.id && uid) {
-          await addDoc(collection(db, 'inscripciones'), {
+          await cursosService.crearInscripcion({
             cursoId: cursosDB[selectedCurso].id,
             alumnoUid: uid,
             alumnoEmail: email,
-            alumnoCodigo: codigo,
-            fecha: new Date()
+            alumnoCodigo: codigo
           });
         }
       } catch (err) {
@@ -190,7 +185,6 @@ function ProfesorPanel({ cursos, setCursos, user }) {
     nuevosCursos[selectedCurso].estudiantes[i].notas = { ...editNotas };
     setCursos(nuevosCursos);
     setPendingChanges(true);
-    setEditAlumnoIdx(null);
   };
 
   const eliminarEstudiante = async (i) => {
@@ -202,7 +196,10 @@ function ProfesorPanel({ cursos, setCursos, user }) {
 
   const guardarCambios = async () => {
     if (selectedCurso === null || !cursosDB[selectedCurso].id) return;
-    await updateDoc(doc(db, 'cursos', cursosDB[selectedCurso].id), { estudiantes: cursosDB[selectedCurso].estudiantes });
+    await cursosService.actualizarEstudiantes(
+      cursosDB[selectedCurso].id,
+      cursosDB[selectedCurso].estudiantes
+    );
     setPendingChanges(false);
   };
 
@@ -210,7 +207,7 @@ function ProfesorPanel({ cursos, setCursos, user }) {
     const curso = cursosDB[idx];
     if (!curso.id) return;
     if (window.confirm('¿Estás seguro de eliminar este curso? Esta acción no se puede deshacer.')) {
-      await deleteDoc(doc(db, 'cursos', curso.id));
+      await cursosService.eliminarCurso(curso.id);
       const nuevosCursos = cursosDB.filter((_, i) => i !== idx);
       setCursos(nuevosCursos);
       // Si el curso eliminado era el seleccionado, deselecciona
@@ -274,6 +271,7 @@ function ProfesorPanel({ cursos, setCursos, user }) {
       extrasColumns.forEach(col => {
         row[col] = est.notas?.[col] || '';
       });
+      row.notaFinal = calcularNotaFinal(est.notas, notasExtras).toFixed(2);
       return row;
     });
     const csv = Papa.unparse({ fields: allColumns, data });
@@ -401,219 +399,41 @@ function ProfesorPanel({ cursos, setCursos, user }) {
             <div>
               <h4>Estudiantes en {cursosDB[selectedCurso].nombre}</h4>
               <div className="card mb-4 p-3">
-                <div className="input-group mb-2">
+                <AgregarEstudianteForm
+                  nuevoEstudiante={nuevoEstudiante}
+                  setNuevoEstudiante={setNuevoEstudiante}
+                  notas={notas}
+                  setNotas={setNotas}
+                  notasExtras={notasExtras}
+                  handleNotaExtraChange={handleNotaExtraChange}
+                  agregarNotaExtra={agregarNotaExtra}
+                  agregarEstudiante={agregarEstudiante}
+                  errorEstudiante={errorEstudiante}
+                />
+                <div className="mb-2">
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="Nombre del estudiante"
-                    value={nuevoEstudiante}
-                    onChange={e => setNuevoEstudiante(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'ArrowRight' || e.key === 'Enter') {
-                        e.preventDefault();
-                        document.getElementById('input-pc1')?.focus();
-                      }
-                    }}
+                    placeholder="Buscar estudiante..."
+                    value={busqueda}
+                    onChange={e => setBusqueda(e.target.value)}
                   />
-                  <input
-                    id="input-pc1"
-                    type="number"
-                    className="form-control"
-                    placeholder="PC1"
-                    value={notas.pc1}
-                    onChange={e => setNotas({ ...notas, pc1: e.target.value })}
-                    onKeyDown={e => {
-                      if (e.key === 'ArrowLeft') {
-                        e.preventDefault();
-                        document.querySelector('input[placeholder=\'Nombre del estudiante\']')?.focus();
-                      } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
-                        e.preventDefault();
-                        document.getElementById('input-pc2')?.focus();
-                      }
-                    }}
-                  />
-                  <input
-                    id="input-pc2"
-                    type="number"
-                    className="form-control"
-                    placeholder="PC2"
-                    value={notas.pc2}
-                    onChange={e => setNotas({ ...notas, pc2: e.target.value })}
-                    onKeyDown={e => {
-                      if (e.key === 'ArrowLeft') {
-                        e.preventDefault();
-                        document.getElementById('input-pc1')?.focus();
-                      } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
-                        e.preventDefault();
-                        document.getElementById('input-parcial')?.focus();
-                      }
-                    }}
-                  />
-                  <input
-                    id="input-parcial"
-                    type="number"
-                    className="form-control"
-                    placeholder="Parcial"
-                    value={notas.parcial}
-                    onChange={e => setNotas({ ...notas, parcial: e.target.value })}
-                    onKeyDown={e => {
-                      if (e.key === 'ArrowLeft') {
-                        e.preventDefault();
-                        document.getElementById('input-pc2')?.focus();
-                      } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
-                        e.preventDefault();
-                        document.getElementById('input-final')?.focus();
-                      }
-                    }}
-                  />
-                  <input
-                    id="input-final"
-                    type="number"
-                    className="form-control"
-                    placeholder="Final"
-                    value={notas.final}
-                    onChange={e => setNotas({ ...notas, final: e.target.value })}
-                    onKeyDown={e => {
-                      if (e.key === 'ArrowLeft') {
-                        e.preventDefault();
-                        document.getElementById('input-parcial')?.focus();
-                      } else if ((e.key === 'ArrowRight' || e.key === 'Enter') && document.getElementById('input-opc1')) {
-                        e.preventDefault();
-                        document.getElementById('input-opc1')?.focus();
-                      }
-                    }}
-                  />
-                  {notasExtras.map((nota, idx) => (
-                    <input
-                      key={nota.nombre}
-                      id={`input-${nota.nombre}`}
-                      type="number"
-                      className="form-control"
-                      placeholder={nota.label}
-                      value={nota.valor}
-                      onChange={e => handleNotaExtraChange(idx, e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'ArrowLeft') {
-                          e.preventDefault();
-                          if (idx === 0) {
-                            document.getElementById('input-final')?.focus();
-                          } else {
-                            document.getElementById(`input-${notasExtras[idx-1].nombre}`)?.focus();
-                          }
-                        } else if ((e.key === 'ArrowRight' || e.key === 'Enter') && idx < notasExtras.length - 1) {
-                          e.preventDefault();
-                          document.getElementById(`input-${notasExtras[idx+1].nombre}`)?.focus();
-                        }
-                      }}
-                    />
-                  ))}
-                  <button className="btn btn-secondary" type="button" onClick={agregarNotaExtra}>+ Nota</button>
-                  <button className="btn btn-primary" type="button" onClick={agregarEstudiante}>Agregar Estudiante</button>
                 </div>
-                {errorEstudiante && (
-                  <div className="alert alert-danger my-2">{errorEstudiante}</div>
+                <EstudiantesTabla
+                  estudiantes={estudiantesFiltrados}
+                  notasExtras={notasExtras}
+                  handleVerPerfilAlumno={handleVerPerfilAlumno}
+                  guardarNotasEditadas={guardarNotasEditadas}
+                  eliminarEstudiante={eliminarEstudiante}
+                />
+                {pendingChanges && (
+                  <div className="d-flex justify-content-end mt-2">
+                    <button className="btn btn-success" onClick={guardarCambios}>
+                      Guardar cambios en la base de datos
+                    </button>
+                  </div>
                 )}
               </div>
-              <div className="mb-2">
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Buscar estudiante..."
-                  value={busqueda}
-                  onChange={e => setBusqueda(e.target.value)}
-                />
-              </div>
-              <table className="table table-bordered mt-3">
-                <thead>
-                  <tr>
-                    <th>Estudiante</th>
-                    <th>PC1</th>
-                    <th>PC2</th>
-                    <th>Parcial</th>
-                    <th>Final</th>
-                    {notasExtras.map((nota, idx) => (
-                      <th key={nota.nombre}>{nota.label}</th>
-                    ))}
-                    <th>Nota Final</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {estudiantesFiltrados.map((est, i) => {
-                    // Asegurarse de que las notas extras estén alineadas correctamente
-                    const pc1 = est.notas?.pc1 ?? '';
-                    const pc2 = est.notas?.pc2 ?? '';
-                    const parcial = est.notas?.parcial ?? '';
-                    const final = est.notas?.final ?? '';
-                    // Mostrar extras en el mismo orden que notasExtras
-                    const extrasValues = notasExtras.map(n => est.notas?.[n.nombre] ?? '');
-                    // Calcular promedio correctamente
-                    const extrasKeys = notasExtras.map(n => n.nombre).filter(k => est.notas[k] !== '' && !isNaN(est.notas[k]));
-                    let promedioExtras = 0;
-                    if (extrasKeys.length > 0) {
-                      promedioExtras = extrasKeys.reduce((acc, k) => acc + (+est.notas[k] || 0), 0) / extrasKeys.length;
-                    }
-                    let promedioPC = 0;
-                    if (extrasKeys.length > 0) {
-                      promedioPC = ((+pc1 + +pc2) / 2) * 0.5 + promedioExtras * 0.5;
-                    } else {
-                      promedioPC = (+pc1 + +pc2) / 2;
-                    }
-                    let notaFinal = (promedioPC * 0.4) + ((+parcial || 0) * 0.3) + ((+final || 0) * 0.3);
-                    if (notaFinal > 20) notaFinal = 20;
-                    return editAlumnoIdx === i ? (
-                      <tr key={i}>
-                        <td>{est.nombre}</td>
-                        <td><input type="number" className="form-control" value={editNotas.pc1} onChange={e => setEditNotas({ ...editNotas, pc1: e.target.value })} /></td>
-                        <td><input type="number" className="form-control" value={editNotas.pc2} onChange={e => setEditNotas({ ...editNotas, pc2: e.target.value })} /></td>
-                        <td><input type="number" className="form-control" value={editNotas.parcial} onChange={e => setEditNotas({ ...editNotas, parcial: e.target.value })} /></td>
-                        <td><input type="number" className="form-control" value={editNotas.final} onChange={e => setEditNotas({ ...editNotas, final: e.target.value })} /></td>
-                        {notasExtras.map((nota, idx) => (
-                          <td key={nota.nombre}><input type="number" className="form-control" value={editNotas[nota.nombre]} onChange={e => setEditNotas({ ...editNotas, [nota.nombre]: e.target.value })} /></td>
-                        ))}
-                        <td>{notaFinal.toFixed(2)}</td>
-                        <td>
-                          <button className="btn btn-success btn-sm me-1" onClick={() => guardarNotasEditadas(i)}>Guardar</button>
-                          <button className="btn btn-secondary btn-sm" onClick={() => setEditAlumnoIdx(null)}>Cancelar</button>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={i}>
-                        <td>
-                          <span
-                            style={{ color: '#A05252', cursor: 'pointer', textDecoration: 'underline' }}
-                            onClick={() => handleVerPerfilAlumno(est.nombre, est.codigo, est.uid)}
-                          >
-                            {est.nombre}
-                          </span>
-                        </td>
-                        <td>{pc1}</td>
-                        <td>{pc2}</td>
-                        <td>{parcial}</td>
-                        <td>{final}</td>
-                        {extrasValues.map((val, idx) => (
-                          <td key={idx}>{val}</td>
-                        ))}
-                        <td>{notaFinal.toFixed(2)}</td>
-                        <td>
-                          <button className="btn btn-warning btn-sm" onClick={() => {
-                            setEditAlumnoIdx(i);
-                            setEditNotas({ ...est.notas });
-                          }}>Editar</button>
-                          <button className="btn btn-danger btn-sm ms-1" onClick={() => eliminarEstudiante(i)}>Eliminar</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {pendingChanges && (
-                <div className="d-flex justify-content-end mt-2">
-                  <button className="btn btn-success" onClick={guardarCambios}>
-                    Guardar cambios en la base de datos
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>

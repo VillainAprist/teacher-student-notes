@@ -3,27 +3,37 @@ import { useEffect, useState } from 'react';
 import { db } from '../services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
-function Perfil({ perfil, user }) {
+function Perfil({ perfil, user, setPerfil }) {
   const navigate = useNavigate();
   const { id } = useParams();
   const [perfilAlumno, setPerfilAlumno] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!id || id === user?.uid) {
-      setPerfilAlumno(null);
-      return;
-    }
+    if (!id) return;
     setLoading(true);
     getDoc(doc(db, 'usuarios', id)).then(docSnap => {
       if (docSnap.exists()) {
-        setPerfilAlumno(docSnap.data());
+        const data = docSnap.data();
+        setPerfilAlumno(data);
+        // If viewing own profile, update app state too
+        if (user?.uid === id && setPerfil) {
+          setPerfil({
+            nombre: data.nombre || user.nombre || user.username,
+            correo: data.email || user.email || '',
+            telefono: data.telefono || '',
+            escuela: data.escuela || '',
+            seccion: data.seccion || '',
+            imagen: data.imagen || '',
+            codigo: data.codigo || user.codigo || ''
+          });
+        }
       } else {
         setPerfilAlumno({ notFound: true });
       }
       setLoading(false);
     });
-  }, [id, user?.uid]);
+  }, [id, user?.uid, setPerfil, user]);
 
   if (loading) return <div className="container mt-4">Cargando perfil...</div>;
   if (perfilAlumno?.notFound) return <div className="container mt-4">Perfil no encontrado.</div>;
@@ -47,11 +57,10 @@ function Perfil({ perfil, user }) {
           <strong>Sección:</strong> {datos.seccion}<br/>
           <strong>Teléfono:</strong> {datos.telefono}
         </div>
-        <div className="mb-2">
-          <strong>Descripción:</strong><br/>
-          <span>{datos.masInfo || 'Sin descripción'}</span>
-        </div>
-        {!perfilAlumno && (
+        <strong>Descripción:</strong><br/>
+        <span>{datos.masInfo || 'Sin descripción'}</span>
+        {/* Mostrar botón solo si el perfil es el del usuario autenticado */}
+        {user?.uid === id && !perfilAlumno?.notFound && (
           <div className="mt-3">
             <button className="btn btn-primary" onClick={() => navigate('/editar-perfil')}>Editar perfil</button>
           </div>

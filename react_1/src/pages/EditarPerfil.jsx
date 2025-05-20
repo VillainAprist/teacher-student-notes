@@ -47,18 +47,6 @@ function EditarPerfil({ perfil, user, setPerfil, onGuardado }) {
       <h2>Editar Perfil</h2>
       <div className="card p-4 mb-3">
         <div className="mb-3">
-          <label className="form-label">Nombre</label>
-          <input className="form-control" name="nombre" value={form.nombre} onChange={handleChange} />
-        </div>
-        <div className="mb-3">
-          <label className="form-label">Correo</label>
-          <input className="form-control" name="correo" value={form.correo} onChange={handleChange} />
-        </div>
-        <div className="mb-3">
-          <label className="form-label">Código</label>
-          <input className="form-control" name="codigo" value={form.codigo} onChange={handleChange} />
-        </div>
-        <div className="mb-3">
           <label className="form-label">Teléfono</label>
           <input className="form-control" name="telefono" value={form.telefono} onChange={handleChange} />
         </div>
@@ -80,6 +68,9 @@ function EditarPerfil({ perfil, user, setPerfil, onGuardado }) {
           <label className="form-label">Foto de perfil</label>
           <input type="file" accept="image/*" className="form-control" onChange={handleImagenChange} />
           {form.imagen && <img src={form.imagen} alt="avatar" style={{width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid #A05252', marginTop:8}} />}
+        </div>
+        <div className="alert alert-info">
+          Solo puedes editar tu teléfono, escuela, sección y descripción. El resto de los datos son gestionados por el sistema.
         </div>
         <div className="mt-3">
           <button className="btn btn-success me-2" onClick={handleGuardar} disabled={guardando}>{guardando ? 'Guardando...' : 'Guardar'}</button>
