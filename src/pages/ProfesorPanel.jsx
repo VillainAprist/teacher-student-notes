@@ -14,7 +14,7 @@ import {
 } from 'chart.js';
 
 // Importaciones de servicios internos
-import { db } from '../services/firebase.js';
+import { db } from '../services/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCursos } from '../hooks/useCursos';
 import { calcularNotaFinal } from '../utils/calculoNotas';
@@ -108,6 +108,12 @@ function ProfesorPanel({ cursos, setCursos, user }) {
       ...notasExtras,
       { nombre: `opc${notasExtras.length + 1}`, label: `Opc ${notasExtras.length + 1}`, valor: '' }
     ]);
+  };
+
+  const quitarNotaExtra = () => {
+    if (notasExtras.length > 0) {
+      setNotasExtras(notasExtras.slice(0, -1));
+    }
   };
 
   // Guardar estudiantes y notas localmente al agregar estudiante
@@ -325,26 +331,51 @@ function ProfesorPanel({ cursos, setCursos, user }) {
         <div className="col-md-3" style={{ paddingLeft: 0, paddingRight: 0 }}>
           <ul className="list-group">
             {cursosDB.map((curso, idx) => (
-              <li key={idx} className={`list-group-item d-flex justify-content-between align-items-center ${selectedCurso === idx ? 'active' : ''}`}
-                onClick={() => handleSelectCurso(idx)} style={{ cursor: 'pointer', marginBottom: 10, padding: '16px 12px' }}>
-                <div>
-                  <strong>{curso.nombre}</strong>
-                  <div style={{ fontSize: '0.9em' }}>
-                    {curso.escuela} - Sección {curso.seccion}
+              <li
+                key={idx}
+                className={`list-group-item d-flex align-items-center ${selectedCurso === idx ? 'active' : ''}`}
+                onClick={() => handleSelectCurso(idx)}
+                style={{
+                  cursor: 'pointer',
+                  marginBottom: 12,
+                  padding: '18px 18px',
+                  borderRadius: 12,
+                  boxShadow: selectedCurso === idx ? '0 2px 12px rgba(160,82,82,0.08)' : '0 1px 4px rgba(160,82,82,0.04)',
+                  border: selectedCurso === idx ? '2px solid #A05252' : '1.5px solid #eee',
+                  transition: 'box-shadow 0.2s, border 0.2s',
+                  minWidth: 0,
+                  background: selectedCurso === idx ? '#A05252' : '#fff', // Fondo más oscuro al seleccionar
+                  color: selectedCurso === idx ? '#fff' : '#5C2B2B' // Letras blancas si está seleccionado
+                }}
+              >
+                <div style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                    {/* Avatar eliminado */}
+                    <div style={{ minWidth: 0 }}>
+                      <strong style={{ fontSize: 18, color: selectedCurso === idx ? '#fff' : '#5C2B2B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>{curso.nombre}</strong>
+                      <div style={{ fontSize: '0.95em', color: selectedCurso === idx ? '#f5dada' : '#A05252', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {curso.escuela} - Sección {curso.seccion}
+                      </div>
+                      <div style={{ fontSize: '0.85em', color: selectedCurso === idx ? '#f5dada' : '#888', marginTop: 2 }}>
+                        {Array.isArray(curso.estudiantes) ? `${curso.estudiantes.length} estudiante${curso.estudiantes.length === 1 ? '' : 's'}` : '0 estudiantes'}
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="d-flex align-items-center gap-2">
-                  <label className="btn btn-outline-primary btn-sm mb-0 p-1" title="Importar CSV" style={{minWidth:32, minHeight:32, display:'flex',alignItems:'center',justifyContent:'center'}}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5-.5h4.5V2.5a.5.5 0 0 1 1 0v6.9h4.5a.5.5 0 0 1 0 1H6.5v6.1a.5.5 0 0 1-1 0V10.9H1a.5.5 0 0 1-.5-.5z"/></svg>
-                    <input type="file" accept=".csv" style={{ display: 'none' }} onChange={e => handleCSV(e, idx)} />
-                  </label>
-                  <button className="btn btn-outline-success btn-sm p-1" type="button" title="Ver Gráfica" style={{minWidth:32, minHeight:32, display:'flex',alignItems:'center',justifyContent:'center'}} onClick={e => { e.stopPropagation(); setShowChartIdx(idx === showChartIdx ? null : idx); }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M0 0h1v15h15v1H0V0zm13 13V7h-2v6h2zm-3 0V3h-2v10h2zm-3 0V9H5v4h2z"/></svg>
-                  </button>
-                  <button className="btn btn-outline-danger btn-sm p-1" type="button" title="Eliminar" style={{minWidth:32, minHeight:32, display:'flex',alignItems:'center',justifyContent:'center'}} onClick={e => { e.stopPropagation(); eliminarCurso(idx); }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
-                  </button>
-                </div>
+                {selectedCurso === idx && (
+                  <div className="d-flex align-items-center gap-2 flex-wrap ms-2" style={{ minWidth: 0, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                    <label className="btn btn-outline-primary btn-sm mb-0 p-1 d-flex align-items-center justify-content-center" title="Importar CSV" style={{ minWidth: 36, minHeight: 36 }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5-.5h4.5V2.5a.5.5 0 0 1 1 0v6.9h4.5a.5.5 0 0 1 0 1H6.5v6.1a.5.5 0 0 1-1 0V10.9H1a.5.5 0 0 1-.5-.5z"/></svg>
+                      <input type="file" accept=".csv" style={{ display: 'none' }} onChange={e => handleCSV(e, idx)} />
+                    </label>
+                    <button className="btn btn-outline-success btn-sm p-1 d-flex align-items-center justify-content-center" type="button" title="Ver Gráfica" style={{ minWidth: 36, minHeight: 36 }} onClick={e => { e.stopPropagation(); setShowChartIdx(idx === showChartIdx ? null : idx); }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M0 0h1v15h15v1H0V0zm13 13V7h-2v6h2zm-3 0V3h-2v10h2zm-3 0V9H5v4h2z"/></svg>
+                    </button>
+                    <button className="btn btn-outline-danger btn-sm p-1 d-flex align-items-center justify-content-center" type="button" title="Eliminar" style={{ minWidth: 36, minHeight: 36 }} onClick={e => { e.stopPropagation(); eliminarCurso(idx); }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -407,6 +438,7 @@ function ProfesorPanel({ cursos, setCursos, user }) {
                   notasExtras={notasExtras}
                   handleNotaExtraChange={handleNotaExtraChange}
                   agregarNotaExtra={agregarNotaExtra}
+                  quitarNotaExtra={quitarNotaExtra}
                   agregarEstudiante={agregarEstudiante}
                   errorEstudiante={errorEstudiante}
                 />

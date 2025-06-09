@@ -59,6 +59,11 @@ function App() {
                 <li className="nav-item">
                   <Link className="nav-link" style={{color:'#fff'}} to={`/perfil/${user?.uid}`}>Perfil</Link>
                 </li>
+                {user?.role === 'admin' && (
+                  <li className="nav-item">
+                    <Link className="nav-link" style={{color:'#fff'}} to="/admin">Panel Admin</Link>
+                  </li>
+                )}
               </ul>
               <span className="navbar-text me-3 d-flex align-items-center" style={{color: '#fff'}}>
                 {perfil?.imagen && (

@@ -11,6 +11,7 @@ import React from 'react';
  * @param {Array} notasExtras
  * @param {function} handleNotaExtraChange
  * @param {function} agregarNotaExtra
+ * @param {function} quitarNotaExtra
  * @param {function} agregarEstudiante
  * @param {string} errorEstudiante
  */
@@ -22,6 +23,7 @@ export default function AgregarEstudianteForm({
   notasExtras,
   handleNotaExtraChange,
   agregarNotaExtra,
+  quitarNotaExtra,
   agregarEstudiante,
   errorEstudiante
 }) {
@@ -132,7 +134,8 @@ export default function AgregarEstudianteForm({
           }}
         />
       ))}
-      <button className="btn btn-secondary" type="button" onClick={agregarNotaExtra}>+ Nota</button>
+      <button className="btn btn-secondary" type="button" onClick={agregarNotaExtra} title="Agregar campo de nota extra">+</button>
+      <button className="btn btn-secondary" type="button" onClick={quitarNotaExtra} title="Quitar último campo de nota extra" disabled={notasExtras.length === 0}>-</button>
       <button className="btn btn-primary" type="button" onClick={agregarEstudiante}>Agregar Estudiante</button>
       {errorEstudiante && (
         <div className="alert alert-danger my-2">{errorEstudiante}</div>

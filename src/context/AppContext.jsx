@@ -1,6 +1,7 @@
 // src/context/AppContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from '../services/firebase';
+import { getDoc, doc } from 'firebase/firestore';
 
 const AppContext = createContext();
 
@@ -37,6 +38,25 @@ export function AppProvider({ children }) {
       localStorage.setItem('theme', 'light');
     }
   }, [darkMode]);
+
+  // Verifica si el usuario guardado existe en Firestore
+  useEffect(() => {
+    async function checkUserExists() {
+      if (user && user.uid) {
+        try {
+          const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
+          if (!userDoc.exists()) {
+            setUser(null);
+          }
+        } catch (e) {
+          setUser(null);
+        }
+      }
+    }
+    checkUserExists();
+    // Solo al montar
+    // eslint-disable-next-line
+  }, []);
 
   // ...puedes agregar aquí los efectos de perfil/cursos si lo deseas...
 
