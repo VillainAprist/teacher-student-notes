@@ -17,6 +17,8 @@ import {
 import { db } from '../services/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useCursos } from '../hooks/useCursos';
+import { useCursosAlumno } from '../hooks/useCursosAlumno';
+import { useAlumnosPorCurso } from '../hooks/useAlumnosPorCurso';
 import { calcularNotaFinal } from '../utils/calculoNotas';
 import { cursosService } from '../services/cursosService';
 
@@ -50,11 +52,29 @@ function ProfesorPanel({ cursos, setCursos, user }) {
   const [showChartIdx, setShowChartIdx] = useState(null);
   const [pendingChanges, setPendingChanges] = useState(false);
   const [errorEstudiante, setErrorEstudiante] = useState('');
+  const [mensajeExito, setMensajeExito] = useState('');
   const navigate = useNavigate();
   const fileInputRef = useRef();
 
-  // Usa el hook para obtener los cursos del profesor
-  const cursosDB = useCursos({ profesorEmail: user?.email });
+  // Hook para cursos según rol
+  let cursosDB = [];
+  let alumnosInscritos = [];
+  let useAlumnosPorCursoResult = { alumnos: [] };
+  if (user?.role === 'alumno') {
+    // Si el usuario es alumno, usar useCursosAlumno
+    const { cursos: cursosAlumno = [] } = useCursosAlumno(user.uid) || {};
+    cursosDB = cursosAlumno;
+  } else if (user?.role === 'profesor') {
+    // Si el usuario es profesor, usar useCursos filtrando por profesorUid
+    cursosDB = useCursos({ profesorUid: user.uid }) || [];
+    // Hook de alumnos por curso SIEMPRE se llama, pero pasa null si no hay curso seleccionado
+    const cursoId = (selectedCurso !== null && cursosDB[selectedCurso]) ? cursosDB[selectedCurso].id : null;
+    useAlumnosPorCursoResult = useAlumnosPorCurso(cursoId);
+    alumnosInscritos = useAlumnosPorCursoResult.alumnos || [];
+  } else {
+    cursosDB = [];
+  }
+  cursosDB = cursosDB.map(curso => ({ ...curso, estudiantes: Array.isArray(curso.estudiantes) ? curso.estudiantes : [] }));
 
   const handleCSV = (e, idx) => {
     const file = e.target.files[0];
@@ -167,7 +187,8 @@ function ProfesorPanel({ cursos, setCursos, user }) {
             cursoId: cursosDB[selectedCurso].id,
             alumnoUid: uid,
             alumnoEmail: email,
-            alumnoCodigo: codigo
+            alumnoCodigo: codigo,
+            notas: notasNumericas // Ahora se guarda el campo notas
           });
         }
       } catch (err) {
@@ -186,11 +207,53 @@ function ProfesorPanel({ cursos, setCursos, user }) {
     fileInputRef.current?.click();
   };
 
-  const guardarNotasEditadas = async (i) => {
-    const nuevosCursos = [...cursosDB];
-    nuevosCursos[selectedCurso].estudiantes[i].notas = { ...editNotas };
-    setCursos(nuevosCursos);
-    setPendingChanges(true);
+  // Estado local para notas editadas pendientes
+  const [notasPendientes, setNotasPendientes] = useState({});
+
+  // Estado para edición masiva
+  const [edicionMasiva, setEdicionMasiva] = useState(false);
+
+  // Guardar notas editadas localmente (solo en el estado, no en Firestore)
+  const guardarNotasEditadas = (i, notasEditadas) => {
+    if (selectedCurso === null || !cursosDB[selectedCurso]) return;
+    const alumno = estudiantesFiltrados[i];
+    // Usa alumno.alumnoUid si existe, si no uid
+    const alumnoUid = alumno.alumnoUid || alumno.uid;
+    if (!alumno || !alumnoUid) return;
+    setNotasPendientes(prev => ({
+      ...prev,
+      [alumnoUid]: notasEditadas
+    }));
+    setMensajeExito('Notas editadas localmente. Recuerda guardar globalmente.');
+    setTimeout(() => setMensajeExito(''), 2000);
+  };
+
+  // Guardar todas las notas pendientes en Firestore con confirmación
+  const guardarNotasGlobal = async () => {
+    if (selectedCurso === null || !cursosDB[selectedCurso]) return;
+    if (!window.confirm('¿Quieres guardar todas las notas en la base de datos?')) return;
+    const cursoId = cursosDB[selectedCurso].id;
+    for (const alumno of estudiantesFiltrados) {
+      const alumnoUid = alumno.alumnoUid || alumno.uid;
+      if (notasPendientes[alumnoUid]) {
+        await cursosService.actualizarNotasInscripcion({
+          cursoId,
+          alumnoUid,
+          notas: notasPendientes[alumnoUid]
+        });
+      }
+    }
+    setNotasPendientes({});
+    setMensajeExito('¡Notas guardadas globalmente con éxito!');
+    setTimeout(() => setMensajeExito(''), 2000);
+    window.location.reload();
+  };
+
+  // Guardar todas las notas editadas en modo masivo
+  const guardarNotasMasivo = () => {
+    // Llama a guardarNotasGlobal (ya implementado)
+    guardarNotasGlobal();
+    setEdicionMasiva(false);
   };
 
   const eliminarEstudiante = async (i) => {
@@ -221,7 +284,13 @@ function ProfesorPanel({ cursos, setCursos, user }) {
     }
   };
 
-  const estudiantesFiltrados = selectedCurso !== null ? cursosDB[selectedCurso].estudiantes.filter(est => est.nombre.toLowerCase().includes(busqueda.toLowerCase())) : [];
+  // En vez de usar cursosDB[selectedCurso].estudiantes, usar alumnosInscritos para mostrar la tabla
+  const estudiantesFiltrados = selectedCurso !== null
+    ? alumnosInscritos.filter(est =>
+        (est.alumnoEmail || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+        (est.alumnoCodigo || '').toLowerCase().includes(busqueda.toLowerCase())
+      )
+    : [];
 
   // Función para buscar y navegar al perfil del estudiante
   const handleVerPerfilAlumno = async (nombre, codigo, uid) => {
@@ -229,24 +298,14 @@ function ProfesorPanel({ cursos, setCursos, user }) {
       navigate(`/perfil/${uid}`);
       return;
     }
-    // Fallback: buscar por nombre o código en la colección de usuarios/alumnos
-    const alumnosRef = collection(db, 'alumnos');
-    const q = query(alumnosRef, where('nombre', '==', nombre));
-    const q2 = query(alumnosRef, where('codigo', '==', codigo));
-    let alumnoDoc = null;
-    const snapshotNombre = await getDocs(q);
-    if (!snapshotNombre.empty) {
-      alumnoDoc = snapshotNombre.docs[0];
+    // Si no hay UID, intenta buscar por código o nombre
+    let usuarioSnap = null;
+    if (codigo) usuarioSnap = await cursosService.buscarUsuarioPorCampo('codigo', codigo);
+    if (!usuarioSnap && nombre) usuarioSnap = await cursosService.buscarUsuarioPorCampo('nombre', nombre);
+    if (usuarioSnap && usuarioSnap.id) {
+      navigate(`/perfil/${usuarioSnap.id}`);
     } else {
-      const snapshotCodigo = await getDocs(q2);
-      if (!snapshotCodigo.empty) {
-        alumnoDoc = snapshotCodigo.docs[0];
-      }
-    }
-    if (alumnoDoc) {
-      navigate(`/perfil/${encodeURIComponent(alumnoDoc.id)}`);
-    } else {
-      alert('Perfil no encontrado para este alumno.');
+      alert('No se encontró el perfil del alumno.');
     }
   };
 
@@ -295,38 +354,12 @@ function ProfesorPanel({ cursos, setCursos, user }) {
 
   return (
     <div className="container mt-4">
-      <h2>Gestión de Cursos Universitarios</h2>
-      <div className="mb-3">
-        <label className="form-label">Crear nuevo curso:</label>
-        <div className="row g-2 mb-2">
-          <div className="col-md-4">
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Nombre del curso (ej: Matemática 2)"
-              value={nuevoCurso}
-              onChange={e => setNuevoCurso(e.target.value)}
-            />
-          </div>
-          <div className="col-md-4">
-            <select className="form-select" value={nuevaEscuela} onChange={e => setNuevaEscuela(e.target.value)}>
-              {ESCUELAS.map(esc => <option key={esc} value={esc}>{esc}</option>)}
-            </select>
-          </div>
-          <div className="col-md-2">
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Sección"
-              value={nuevaSeccion}
-              onChange={e => setNuevaSeccion(e.target.value)}
-            />
-          </div>
-          <div className="col-md-2 d-grid">
-            <button className="btn btn-success" onClick={agregarCurso}>Agregar Curso</button>
-          </div>
+      {mensajeExito && (
+        <div className="alert alert-success" role="alert">
+          {mensajeExito}
         </div>
-      </div>
+      )}
+      <h2>Gestión de Cursos Universitarios</h2>
       <div className="row" style={{ marginLeft: 0, marginRight: 0, paddingLeft: 0, paddingRight: 0 }}>
         <div className="col-md-3" style={{ paddingLeft: 0, paddingRight: 0 }}>
           <ul className="list-group">
@@ -356,92 +389,19 @@ function ProfesorPanel({ cursos, setCursos, user }) {
                       <div style={{ fontSize: '0.95em', color: selectedCurso === idx ? '#f5dada' : '#A05252', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {curso.escuela} - Sección {curso.seccion}
                       </div>
-                      <div style={{ fontSize: '0.85em', color: selectedCurso === idx ? '#f5dada' : '#888', marginTop: 2 }}>
-                        {Array.isArray(curso.estudiantes) ? `${curso.estudiantes.length} estudiante${curso.estudiantes.length === 1 ? '' : 's'}` : '0 estudiantes'}
-                      </div>
                     </div>
                   </div>
                 </div>
-                {selectedCurso === idx && (
-                  <div className="d-flex align-items-center gap-2 flex-wrap ms-2" style={{ minWidth: 0, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                    <label className="btn btn-outline-primary btn-sm mb-0 p-1 d-flex align-items-center justify-content-center" title="Importar CSV" style={{ minWidth: 36, minHeight: 36 }}>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5-.5h4.5V2.5a.5.5 0 0 1 1 0v6.9h4.5a.5.5 0 0 1 0 1H6.5v6.1a.5.5 0 0 1-1 0V10.9H1a.5.5 0 0 1-.5-.5z"/></svg>
-                      <input type="file" accept=".csv" style={{ display: 'none' }} onChange={e => handleCSV(e, idx)} />
-                    </label>
-                    <button className="btn btn-outline-success btn-sm p-1 d-flex align-items-center justify-content-center" type="button" title="Ver Gráfica" style={{ minWidth: 36, minHeight: 36 }} onClick={e => { e.stopPropagation(); setShowChartIdx(idx === showChartIdx ? null : idx); }}>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M0 0h1v15h15v1H0V0zm13 13V7h-2v6h2zm-3 0V3h-2v10h2zm-3 0V9H5v4h2z"/></svg>
-                    </button>
-                    <button className="btn btn-outline-danger btn-sm p-1 d-flex align-items-center justify-content-center" type="button" title="Eliminar" style={{ minWidth: 36, minHeight: 36 }} onClick={e => { e.stopPropagation(); eliminarCurso(idx); }}>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
-                    </button>
-                  </div>
-                )}
+                {/* Eliminar botones de importar CSV, ver gráfica y eliminar curso */}
               </li>
             ))}
           </ul>
         </div>
         <div className="col-md-9" style={{ paddingLeft: 0, paddingRight: 0 }}>
-          {showChartIdx !== null && cursosDB[showChartIdx] && selectedCurso === showChartIdx && (
-            <div className="mb-4">
-              <h5 className="mb-3">Desempeño de estudiantes en {cursosDB[showChartIdx].nombre}</h5>
-              <Bar
-                data={{
-                  labels: cursosDB[showChartIdx].estudiantes.map(e => e.nombre),
-                  datasets: [
-                    {
-                      label: 'Nota Final',
-                      backgroundColor: '#A05252',
-                      data: cursosDB[showChartIdx].estudiantes.map(est => {
-                        const pc1 = +est.notas.pc1 || 0;
-                        const pc2 = +est.notas.pc2 || 0;
-                        const extrasKeys = Object.keys(est.notas).filter(k => k.startsWith('opc') && est.notas[k] !== '' && !isNaN(est.notas[k]));
-                        let promedioExtras = 0;
-                        if (extrasKeys.length > 0) {
-                          promedioExtras = extrasKeys.reduce((acc, k) => acc + (+est.notas[k] || 0), 0) / extrasKeys.length;
-                        }
-                        let promedioPC = 0;
-                        if (extrasKeys.length > 0) {
-                          promedioPC = ((pc1 + pc2) / 2) * 0.5 + promedioExtras * 0.5;
-                        } else {
-                          promedioPC = (pc1 + pc2) / 2;
-                        }
-                        let notaFinal = (promedioPC * 0.4) + ((+est.notas.parcial || 0) * 0.3) + ((+est.notas.final || 0) * 0.3);
-                        if (notaFinal > 20) notaFinal = 20;
-                        return notaFinal;
-                      })
-                    }
-                  ]
-                }}
-                options={{
-                  responsive: true,
-                  plugins: {
-                    legend: { display: false },
-                    title: { display: true, text: 'Notas Finales' }
-                  },
-                  scales: {
-                    y: { beginAtZero: true, max: 20 }
-                  }
-                }}
-                height={120}
-              />
-            </div>
-          )}
           {selectedCurso !== null && (
             <div>
               <h4>Estudiantes en {cursosDB[selectedCurso].nombre}</h4>
               <div className="card mb-4 p-3">
-                <AgregarEstudianteForm
-                  nuevoEstudiante={nuevoEstudiante}
-                  setNuevoEstudiante={setNuevoEstudiante}
-                  notas={notas}
-                  setNotas={setNotas}
-                  notasExtras={notasExtras}
-                  handleNotaExtraChange={handleNotaExtraChange}
-                  agregarNotaExtra={agregarNotaExtra}
-                  quitarNotaExtra={quitarNotaExtra}
-                  agregarEstudiante={agregarEstudiante}
-                  errorEstudiante={errorEstudiante}
-                />
                 <div className="mb-2">
                   <input
                     type="text"
@@ -451,18 +411,75 @@ function ProfesorPanel({ cursos, setCursos, user }) {
                     onChange={e => setBusqueda(e.target.value)}
                   />
                 </div>
+                {/* Botón para ver gráfica */}
+                <div className="mb-3 text-end">
+                  <button className="btn btn-outline-success" onClick={() => setShowChartIdx(selectedCurso)}>
+                    Ver Gráfica
+                  </button>
+                </div>
+                <div className="mb-2 text-end">
+                  {!edicionMasiva ? (
+                    <button className="btn btn-warning" onClick={() => setEdicionMasiva(true)}>
+                      Editar todas las notas
+                    </button>
+                  ) : (
+                    <button className="btn btn-success" onClick={guardarNotasGlobal}>
+                      Guardar todas las notas
+                    </button>
+                  )}
+                </div>
                 <EstudiantesTabla
                   estudiantes={estudiantesFiltrados}
                   notasExtras={notasExtras}
                   handleVerPerfilAlumno={handleVerPerfilAlumno}
                   guardarNotasEditadas={guardarNotasEditadas}
                   eliminarEstudiante={eliminarEstudiante}
+                  edicionMasiva={edicionMasiva}
+                  setNotasPendientes={setNotasPendientes}
+                  notasPendientes={notasPendientes}
+                  setEditAlumnoIdx={() => {}}
                 />
-                {pendingChanges && (
+                {/* Botón de guardado global */}
+                {Object.keys(notasPendientes).length > 0 && (
                   <div className="d-flex justify-content-end mt-2">
-                    <button className="btn btn-success" onClick={guardarCambios}>
-                      Guardar cambios en la base de datos
+                    <button className="btn btn-success" onClick={guardarNotasGlobal}>
+                      Guardar todas las notas en la base de datos
                     </button>
+                  </div>
+                )}
+                {/* Mostrar gráfica si corresponde */}
+                {showChartIdx === selectedCurso && (
+                  <div className="mb-4 mt-4">
+                    <h5 className="mb-3">Desempeño de estudiantes en {cursosDB[selectedCurso].nombre}</h5>
+                    <Bar
+                      data={{
+                        labels: estudiantesFiltrados.map(e => e.nombre),
+                        datasets: [
+                          {
+                            label: 'Nota Final',
+                            backgroundColor: '#A05252',
+                            data: estudiantesFiltrados.map(est => {
+                              // Calcular nota final usando la misma lógica que la tabla
+                              const notas = est.notas || {};
+                              const susti = notas.susti ?? notas.sustitutorio ?? '';
+                              const aplaz = notas.aplaz ?? notas.aplazado ?? '';
+                              return calcularNotaFinal({ ...notas, susti, aplaz }, notasExtras);
+                            })
+                          }
+                        ]
+                      }}
+                      options={{
+                        responsive: true,
+                        plugins: {
+                          legend: { display: false },
+                          title: { display: true, text: 'Notas Finales' }
+                        },
+                        scales: {
+                          y: { beginAtZero: true, max: 20 }
+                        }
+                      }}
+                      height={120}
+                    />
                   </div>
                 )}
               </div>

@@ -6,7 +6,7 @@
 }
 
 #root {
-  max-width: 1280px;
+  max-width: 1600px; /* Aumenta el ancho máximo */
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
@@ -40,10 +40,21 @@
   }
 }
 
+.container {
+  max-width: 1200px !important; /* Aumenta el ancho de los contenedores */
+}
+
 .card {
   padding: 2em;
   background: var(--color-card);
   color: var(--color-text);
+  width: 100%; /* Ocupa todo el ancho disponible */
+}
+
+/* Ajusta la tabla para que use todo el ancho */
+.table {
+  width: 100% !important;
+  table-layout: auto;
 }
 
 .read-the-docs {
