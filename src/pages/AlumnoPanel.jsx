@@ -40,50 +40,58 @@ function AlumnoPanel({ user, perfil }) {
       {cursos.length === 0 ? (
         <p>No tienes cursos inscritos.</p>
       ) : (
-        cursos.map((curso) => (
-          <div key={curso.id} className="card mb-3">
-            <div className="card-header d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-              <span>
-                <b>{curso.nombre}</b>
-                {curso.seccion && <span className="badge bg-secondary ms-2">Sección: {curso.seccion}</span>}
-                {curso.ciclo && <span className="badge bg-info ms-2">Ciclo: {curso.ciclo}</span>}
-                {curso.escuela && <span className="badge bg-primary ms-2">{curso.escuela}</span>}
-              </span>
-              <span style={{fontSize:'0.95em', color:'#555'}}>
-                Profesor: <b>{curso.profesorNombre || curso.profesor || 'Sin asignar'}</b>
-                {curso.profesorEmail && <span className="ms-2" style={{fontSize:'0.9em', color:'#888'}}>{curso.profesorEmail}</span>}
-              </span>
+        cursos.map((curso) => {
+          const notas = curso.notas || {};
+          // Calcula el promedio de prácticas (PC)
+          let promedioPC = '-';
+          if (notas.pc1 !== undefined && notas.pc2 !== undefined) {
+            promedioPC = ((Number(notas.pc1) + Number(notas.pc2)) / 2).toFixed(2);
+          } else if (notas.pc1 !== undefined) {
+            promedioPC = notas.pc1;
+          } else if (notas.pc2 !== undefined) {
+            promedioPC = notas.pc2;
+          }
+          return (
+            <div key={curso.id} className="card mb-3">
+              <div className="card-header d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                <span>
+                  <b>{curso.nombre}</b>
+                  {curso.seccion && <span className="badge bg-secondary ms-2">Sección: {curso.seccion}</span>}
+                  {curso.ciclo && <span className="badge bg-info ms-2">Ciclo: {curso.ciclo}</span>}
+                  {curso.escuela && <span className="badge bg-primary ms-2">{curso.escuela}</span>}
+                </span>
+                <span style={{fontSize:'0.95em', color:'#555'}}>
+                  Profesor: <b>{curso.profesorNombre || curso.profesor || 'Sin asignar'}</b>
+                  {curso.profesorEmail && <span className="ms-2" style={{fontSize:'0.9em', color:'#888'}}>{curso.profesorEmail}</span>}
+                </span>
+              </div>
+              <div className="card-body">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>PC (Promedio)</th>
+                      <th>Parcial</th>
+                      <th>Final</th>
+                      <th>Susti</th>
+                      <th>Aplaz</th>
+                      <th>Nota Final</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>{promedioPC}</td>
+                      <td>{notas.parcial ?? '-'}</td>
+                      <td>{notas.final ?? '-'}</td>
+                      <td>{notas.susti ?? notas.sustitutorio ?? '-'}</td>
+                      <td>{notas.aplaz ?? notas.aplazado ?? '-'}</td>
+                      <td>{calcularNotaFinal(notas).toFixed(2)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="card-body">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>PC1</th>
-                    <th>PC2</th>
-                    <th>Parcial</th>
-                    <th>Final</th>
-                    <th>Susti</th>
-                    <th>Aplaz</th>
-                    <th>Extras</th>
-                    <th>Promedio</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>{curso.notas?.pc1 ?? ''}</td>
-                    <td>{curso.notas?.pc2 ?? ''}</td>
-                    <td>{curso.notas?.parcial ?? ''}</td>
-                    <td>{curso.notas?.final ?? ''}</td>
-                    <td>{curso.notas?.susti ?? curso.notas?.sustitutorio ?? ''}</td>
-                    <td>{curso.notas?.aplaz ?? curso.notas?.aplazado ?? ''}</td>
-                    <td>{Object.keys(curso.notas || {}).filter(k => k.startsWith('opc')).map(k => curso.notas[k]).join(', ')}</td>
-                    <td>{calcularNotaFinal(curso.notas).toFixed(2)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))
+          );
+        })
       )}
     </div>
   );

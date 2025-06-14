@@ -23,6 +23,9 @@ import ThemeSwitcher from './components/ThemeSwitcher';
 // Contexto
 import { useAppContext } from './context/AppContext';
 
+// Fuentes
+import "@fontsource/inter";
+
 function App() {
   const { user, setUser, cursos, setCursos, perfil, setPerfil, darkMode, setDarkMode } = useAppContext();
 
@@ -58,6 +61,12 @@ function App() {
                 </li>
                 <li className="nav-item">
                   <Link className="nav-link" style={{color:'#fff'}} to={`/perfil/${user?.uid}`}>Perfil</Link>
+                </li>
+                <li className="nav-item">
+                  <Link className="nav-link" style={{color:'#fff'}} to="/mensajes">Mensajes</Link>
+                </li>
+                <li className="nav-item">
+                  <Link className="nav-link" style={{color:'#fff'}} to="/noticias">Noticias</Link>
                 </li>
                 {user?.role === 'admin' && (
                   <li className="nav-item">

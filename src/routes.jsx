@@ -4,6 +4,8 @@ import Perfil from './pages/Perfil';
 import AlumnoPanel from './pages/AlumnoPanel';
 import ProfesorPanel from './pages/ProfesorPanel';
 import EditarPerfil from './pages/EditarPerfil';
+import Mensajes from './pages/Mensajes';
+import Noticias from './pages/Noticias';
 
 export default function AppRoutes({ user, setUser, perfil, setPerfil, cursos, setCursos }) {
   if (!user) {
@@ -18,6 +20,8 @@ export default function AppRoutes({ user, setUser, perfil, setPerfil, cursos, se
       <Route path="/editar-perfil" element={<EditarPerfil user={user} perfil={perfil} setPerfil={setPerfil} />} />
       <Route path="/alumno" element={<AlumnoPanel user={user} cursos={cursos} perfil={perfil} />} />
       <Route path="/profesor" element={<ProfesorPanel user={user} cursos={cursos} setCursos={setCursos} />} />
+      <Route path="/mensajes" element={<Mensajes user={user} />} />
+      <Route path="/noticias" element={<Noticias />} />
       <Route path="*" element={<Navigate to={user.role === 'profesor' ? '/profesor' : '/alumno'} />} />
     </Routes>
   );
