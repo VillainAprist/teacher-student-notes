@@ -25,9 +25,12 @@ import { useAppContext } from './context/AppContext';
 
 // Fuentes
 import "@fontsource/inter";
+import { FaBell } from 'react-icons/fa';
+import { useUnreadNotificaciones } from './hooks/useUnreadNotificaciones';
 
 function App() {
   const { user, setUser, cursos, setCursos, perfil, setPerfil, darkMode, setDarkMode } = useAppContext();
+  const [unreadNotificaciones, notiError] = useUnreadNotificaciones(user);
 
   useEffect(() => {
     if (darkMode) {
@@ -54,7 +57,7 @@ function App() {
             <a className="navbar-brand fw-bold" href="#" style={{color: '#fff', letterSpacing: 1}}>
               UNFV - FIEI | Gestor de Notas
             </a>
-            <div className="collapse navbar-collapse">
+            <div className="collapse navbar-collapse d-flex justify-content-between align-items-center">
               <ul className="navbar-nav me-auto mb-2 mb-lg-0">
                 <li className="nav-item">
                   <Link className="nav-link" style={{color:'#fff'}} to="/">Inicio</Link>
@@ -74,6 +77,19 @@ function App() {
                   </li>
                 )}
               </ul>
+              {/* Notificaciones a la derecha para todos menos admin */}
+              {(user?.role === 'profesor' || user?.role === 'alumno') && (
+                <div className="d-flex align-items-center me-3">
+                  <Link className="nav-link position-relative" style={{color:'#fff', fontSize:22, marginRight:16}} to="/notificaciones">
+                    <FaBell />
+                    {unreadNotificaciones > 0 && (
+                      <span style={{position:'absolute', top:0, right:0, background:'#dc3545', color:'#fff', borderRadius:'50%', fontSize:12, minWidth:18, height:18, display:'inline-flex', alignItems:'center', justifyContent:'center', fontWeight:700, zIndex:2}}>
+                        {unreadNotificaciones}
+                      </span>
+                    )}
+                  </Link>
+                </div>
+              )}
               <span className="navbar-text me-3 d-flex align-items-center" style={{color: '#fff'}}>
                 {perfil?.imagen && (
                   <img src={perfil.imagen} alt="avatar" style={{width:32, height:32, borderRadius:'50%', objectFit:'cover', border:'1.5px solid #fff', marginRight:8}} />
@@ -97,6 +113,12 @@ function App() {
           setCursos={setCursos}
         />
       </div>
+      {notiError && (
+        <div className="alert alert-warning mt-2" style={{maxWidth:400, margin:'0 auto'}}>
+          {notiError} <br />
+          Si ves este mensaje, haz clic en el enlace de la consola para crear el índice en Firestore.
+        </div>
+      )}
     </Router>
   )
 }

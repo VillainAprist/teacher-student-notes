@@ -6,6 +6,7 @@ import ProfesorPanel from './pages/ProfesorPanel';
 import EditarPerfil from './pages/EditarPerfil';
 import Mensajes from './pages/Mensajes';
 import Noticias from './pages/Noticias';
+import Notificaciones from './pages/Notificaciones';
 
 export default function AppRoutes({ user, setUser, perfil, setPerfil, cursos, setCursos }) {
   if (!user) {
@@ -22,6 +23,7 @@ export default function AppRoutes({ user, setUser, perfil, setPerfil, cursos, se
       <Route path="/profesor" element={<ProfesorPanel user={user} cursos={cursos} setCursos={setCursos} />} />
       <Route path="/mensajes" element={<Mensajes user={user} />} />
       <Route path="/noticias" element={<Noticias />} />
+      <Route path="/notificaciones" element={<Notificaciones user={user} />} />
       <Route path="*" element={<Navigate to={user.role === 'profesor' ? '/profesor' : '/alumno'} />} />
     </Routes>
   );

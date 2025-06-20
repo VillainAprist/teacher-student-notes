@@ -21,6 +21,7 @@ import { useCursosAlumno } from '../hooks/useCursosAlumno';
 import { useAlumnosPorCurso } from '../hooks/useAlumnosPorCurso';
 import { calcularNotaFinal } from '../utils/calculoNotas';
 import { cursosService } from '../services/cursosService';
+import { notificacionesService } from '../services/notificacionesService';
 
 // Importaciones de componentes internos
 import AgregarEstudianteForm from '../components/AgregarEstudianteForm';
@@ -233,6 +234,7 @@ function ProfesorPanel({ cursos, setCursos, user }) {
     if (selectedCurso === null || !cursosDB[selectedCurso]) return;
     if (!window.confirm('¿Quieres guardar todas las notas en la base de datos?')) return;
     const cursoId = cursosDB[selectedCurso].id;
+    const cursoNombre = cursosDB[selectedCurso].nombre;
     for (const alumno of estudiantesFiltrados) {
       const alumnoUid = alumno.alumnoUid || alumno.uid;
       if (notasPendientes[alumnoUid]) {
@@ -240,6 +242,14 @@ function ProfesorPanel({ cursos, setCursos, user }) {
           cursoId,
           alumnoUid,
           notas: notasPendientes[alumnoUid]
+        });
+        // Crear notificación para el alumno
+        await notificacionesService.crearNotificacion({
+          usuarioUid: alumnoUid,
+          titulo: 'Notas actualizadas',
+          mensaje: `Tus notas han sido actualizadas en el curso ${cursoNombre}.`,
+          tipo: 'notas_actualizadas',
+          extra: { cursoId, cursoNombre }
         });
       }
     }

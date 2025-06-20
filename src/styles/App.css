@@ -296,3 +296,15 @@ h2, h4 {
     padding: 1.5rem 0.5rem;
   }
 }
+
+.list-group-item.notificacion-unread {
+  background: #e3f0ff !important;
+  border-left: 5px solid #1976d2 !important;
+  color: #222 !important;
+  transition: background 0.2s;
+}
+body.dark-mode .list-group-item.notificacion-unread {
+  background: #22304a !important;
+  color: #fff !important;
+  border-left: 5px solid #90caf9 !important;
+}
