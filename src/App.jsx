@@ -91,7 +91,7 @@ function App() {
                 </div>
               )}
               <span className="navbar-text me-3 d-flex align-items-center" style={{color: '#fff'}}>
-                {perfil?.imagen && (
+                {perfil?.imagen && perfil.imagen !== '' && (
                   <img src={perfil.imagen} alt="avatar" style={{width:32, height:32, borderRadius:'50%', objectFit:'cover', border:'1.5px solid #fff', marginRight:8}} />
                 )}
                 {user?.nombre || user?.username} ({user?.role})

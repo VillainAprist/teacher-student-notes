@@ -38,13 +38,20 @@ function Mensajes({ user }) {
     fetchMensajes();
   }, [tab, user, recargar]);
 
-  // Buscar destinatario directamente en Firestore
-  const buscarUsuarioPorNombre = async (nombre) => {
-    const q = query(collection(db, 'usuarios'), where('nombre', '==', nombre));
+  // Buscar destinatario directamente en Firestore por correo
+  const buscarUsuarioPorCorreo = async (correo) => {
+    const q = query(collection(db, 'usuarios'), where('correo', '==', correo));
     const snap = await getDocs(q);
     if (!snap.empty) {
       const docUser = snap.docs[0];
-      return { uid: docUser.id, nombre: docUser.data().nombre };
+      return { uid: docUser.id, nombre: docUser.data().nombre, correo: docUser.data().correo };
+    }
+    // Intentar también con 'email' por compatibilidad
+    const q2 = query(collection(db, 'usuarios'), where('email', '==', correo));
+    const snap2 = await getDocs(q2);
+    if (!snap2.empty) {
+      const docUser = snap2.docs[0];
+      return { uid: docUser.id, nombre: docUser.data().nombre, correo: docUser.data().correo || docUser.data().email };
     }
     return null;
   };
@@ -53,8 +60,8 @@ function Mensajes({ user }) {
     e.preventDefault();
     if (!destinatario || !asunto || !mensaje) return;
     setEnviando(true);
-    // Buscar destinatario por nombre exacto en Firestore
-    const data = await buscarUsuarioPorNombre(destinatario);
+    // Buscar destinatario por correo en Firestore
+    const data = await buscarUsuarioPorCorreo(destinatario);
     if (!data?.uid) {
       alert('Destinatario no encontrado');
       setEnviando(false);
@@ -63,8 +70,10 @@ function Mensajes({ user }) {
     await mensajesService.enviarMensaje({
       remitenteUid: user.uid,
       remitenteNombre: user.nombre || user.username,
+      remitenteCorreo: user.correo || user.email || '',
       destinatarioUid: data.uid,
       destinatarioNombre: data.nombre,
+      destinatarioCorreo: data.correo,
       asunto,
       mensaje
     });
@@ -95,7 +104,7 @@ function Mensajes({ user }) {
           {tab === 'nuevo' ? (
             <form onSubmit={handleEnviar} className="p-4">
               <div className="mb-2">
-                <label>Para (nombre exacto):</label>
+                <label>Para (correo institucional):</label>
                 <input className="form-control" value={destinatario} onChange={e=>setDestinatario(e.target.value)} required />
               </div>
               <div className="mb-2">
@@ -134,7 +143,7 @@ function Mensajes({ user }) {
               <h5>{mensajeSeleccionado.asunto}</h5>
               <div className="meta">
                 <div><b>De:</b> {mensajeSeleccionado.remitenteNombre}</div>
-                <div><b>Para:</b> {mensajeSeleccionado.destinatarioNombre}</div>
+                <div><b>Para:</b> {mensajeSeleccionado.destinatarioCorreo || mensajeSeleccionado.destinatarioNombre}</div>
                 <div><b>Fecha:</b> {new Date(mensajeSeleccionado.fecha.seconds*1000).toLocaleString()}</div>
               </div>
               <div className="contenido">{mensajeSeleccionado.mensaje}</div>

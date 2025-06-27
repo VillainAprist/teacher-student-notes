@@ -1,18 +1,28 @@
 // src/services/mensajesService.js
 import { db } from './firebase';
-import { collection, addDoc, getDocs, query, where, orderBy, updateDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, orderBy, updateDoc, doc, Timestamp } from 'firebase/firestore';
 
 export const mensajesService = {
-  async enviarMensaje({ remitenteUid, remitenteNombre, destinatarioUid, destinatarioNombre, asunto, mensaje }) {
+  async enviarMensaje({ remitenteUid, remitenteNombre, remitenteCorreo, destinatarioUid, destinatarioNombre, destinatarioCorreo, asunto, mensaje }) {
     await addDoc(collection(db, 'mensajes'), {
       remitenteUid,
       remitenteNombre,
+      remitenteCorreo,
       destinatarioUid,
       destinatarioNombre,
+      destinatarioCorreo,
       asunto,
       mensaje,
-      fecha: new Date(),
+      fecha: Timestamp.now(),
       leido: false
+    });
+    // Crear notificación básica para el destinatario
+    await addDoc(collection(db, 'notificaciones'), {
+      usuarioUid: destinatarioUid,
+      tipo: 'mensaje_recibido',
+      mensaje: `Recibiste un mensaje de ${remitenteNombre} (${remitenteCorreo})`,
+      leido: false,
+      fecha: Timestamp.now()
     });
   },
 

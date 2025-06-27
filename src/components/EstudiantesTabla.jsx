@@ -124,7 +124,7 @@ export default function EstudiantesTabla({
                   <td>
                     <span
                       style={{ color: '#A05252', cursor: 'pointer', textDecoration: 'underline' }}
-                      onClick={() => handleVerPerfilAlumno(est.nombre, est.codigo, est.uid)}
+                      onClick={() => window.open(`/usuario/${est.uid}`, '_blank')}
                     >
                       {est.nombre}
                     </span>

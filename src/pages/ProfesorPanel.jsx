@@ -26,6 +26,8 @@ import { notificacionesService } from '../services/notificacionesService';
 // Importaciones de componentes internos
 import AgregarEstudianteForm from '../components/AgregarEstudianteForm';
 import EstudiantesTabla from '../components/EstudiantesTabla';
+import ImportarNotasCSV from '../components/ImportarNotasCSV';
+import ExportarNotasExcel from '../components/ExportarNotasExcel';
 
 // Registro de componentes de ChartJS
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -201,7 +203,7 @@ function ProfesorPanel({ cursos, setCursos, user }) {
 
   const handleSelectCurso = (idx) => {
     setSelectedCurso(idx);
-    setShowChartIdx(null);
+    setShowChartIdx(null); // Oculta la gráfica al cambiar de curso
   };
 
   const handleImportClick = () => {
@@ -423,8 +425,11 @@ function ProfesorPanel({ cursos, setCursos, user }) {
                 </div>
                 {/* Botón para ver gráfica */}
                 <div className="mb-3 text-end">
-                  <button className="btn btn-outline-success" onClick={() => setShowChartIdx(selectedCurso)}>
-                    Ver Gráfica
+                  <button
+                    className="btn btn-outline-success"
+                    onClick={() => setShowChartIdx(showChartIdx === selectedCurso ? null : selectedCurso)}
+                  >
+                    {showChartIdx === selectedCurso ? 'Ocultar Gráfica' : 'Ver Gráfica'}
                   </button>
                 </div>
                 <div className="mb-2 text-end">
@@ -461,38 +466,68 @@ function ProfesorPanel({ cursos, setCursos, user }) {
                 {showChartIdx === selectedCurso && (
                   <div className="mb-4 mt-4">
                     <h5 className="mb-3">Desempeño de estudiantes en {cursosDB[selectedCurso].nombre}</h5>
-                    <Bar
-                      data={{
-                        labels: estudiantesFiltrados.map(e => e.nombre),
-                        datasets: [
-                          {
-                            label: 'Nota Final',
-                            backgroundColor: '#A05252',
-                            data: estudiantesFiltrados.map(est => {
-                              // Calcular nota final usando la misma lógica que la tabla
-                              const notas = est.notas || {};
-                              const susti = notas.susti ?? notas.sustitutorio ?? '';
-                              const aplaz = notas.aplaz ?? notas.aplazado ?? '';
-                              return calcularNotaFinal({ ...notas, susti, aplaz }, notasExtras);
-                            })
+                    {estudiantesFiltrados.length === 0 ? (
+                      <div className="alert alert-info">No hay estudiantes inscritos para mostrar la gráfica.</div>
+                    ) : (
+                      <Bar
+                        data={{
+                          labels: estudiantesFiltrados.map(e => e.nombre),
+                          datasets: [
+                            {
+                              label: 'Nota Final',
+                              backgroundColor: '#A05252',
+                              data: estudiantesFiltrados.map(est => {
+                                const notas = est.notas || {};
+                                const susti = notas.susti ?? notas.sustitutorio ?? '';
+                                const aplaz = notas.aplaz ?? notas.aplazado ?? '';
+                                return calcularNotaFinal({ ...notas, susti, aplaz }, notasExtras);
+                              })
+                            }
+                          ]
+                        }}
+                        options={{
+                          responsive: true,
+                          plugins: {
+                            legend: { display: false },
+                            title: { display: true, text: 'Notas Finales' }
+                          },
+                          scales: {
+                            y: { beginAtZero: true, max: 20 }
                           }
-                        ]
-                      }}
-                      options={{
-                        responsive: true,
-                        plugins: {
-                          legend: { display: false },
-                          title: { display: true, text: 'Notas Finales' }
-                        },
-                        scales: {
-                          y: { beginAtZero: true, max: 20 }
-                        }
-                      }}
-                      height={120}
-                    />
+                        }}
+                        height={120}
+                      />
+                    )}
                   </div>
                 )}
               </div>
+              {user?.role === 'profesor' && selectedCurso !== null && cursosDB[selectedCurso] && (
+                <>
+                  <ImportarNotasCSV cursoId={cursosDB[selectedCurso].id} />
+                  <ExportarNotasExcel alumnos={alumnosInscritos} notasExtras={notasExtras} />
+                  <div className="card p-3 mb-4">
+                    <h5>Lista de estudiantes del curso</h5>
+                    <table className="table table-bordered">
+                      <thead>
+                        <tr>
+                          <th>Nombre</th>
+                          <th>Código</th>
+                          <th>Correo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {alumnosInscritos.map((al, idx) => (
+                          <tr key={al.id || al.uid || al.codigo || idx}>
+                            <td>{al.nombre || al.alumnoNombre || '-'}</td>
+                            <td>{al.codigo || al.alumnoCodigo || '-'}</td>
+                            <td>{al.correo || al.email || al.alumnoEmail || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
